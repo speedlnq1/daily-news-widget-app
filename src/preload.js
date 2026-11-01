@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('api', {
   setLook: s => ipcRenderer.invoke('set-look', s),
   pickBackground: () => ipcRenderer.invoke('pick-background'),
   clearBackground: () => ipcRenderer.invoke('clear-background'),
+  redditCheckSub: name => ipcRenderer.invoke('reddit-check-sub', name),
   redditComment: link => ipcRenderer.invoke('reddit-comment', link),
   refresh: () => ipcRenderer.invoke('refresh'),
   open: u => ipcRenderer.send('open', u),

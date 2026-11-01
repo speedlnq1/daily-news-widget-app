@@ -128,15 +128,16 @@ function emptyBox(list, icon, head, sub) {
 function renderReddit(list) {
   const posts = redditPosts(), why = data.redditStatus || {};
   const retry = why.retryAt ? ' Next try around ' + clock(why.retryAt) + '.' : '';
+  const h = el('div', 'rh'), top = el('div', 'rhead'); top.appendChild(el('b', '', 'Community discussion · Reddit'));
+  top.appendChild(iconButton('ib', 'settings', 'Choose Reddit communities', () => { showSettings(true, 'rnew'); $('rnew').scrollIntoView({ block: 'center' }); }));
+  h.appendChild(top); list.appendChild(h);
   if (!posts.length) {
     if ((data.reddit || []).length) emptyBox(list, '☑', 'No Reddit posts match your topics', 'Open Settings to pick more topics.');
     else if (why.error) emptyBox(list, '📡', "Couldn't reach Reddit", why.error + '.' + retry);
     else emptyBox(list, '⏳', 'Loading Reddit posts…', 'The first load takes a few seconds.');
     return;
   }
-  const h = el('div', 'rh'); h.appendChild(el('b', '', 'Community discussion · Reddit'));
   h.appendChild(el('span', '', why.error ? 'Showing older posts. Last try failed: ' + why.error + '.' + retry : 'Community discussion. Opinion, not verified news.'));
-  list.appendChild(h);
   posts.forEach((p, i) => {
     const d = el('div', 's g rd'); d.tabIndex = 0; d.dataset.link = p.link; d.setAttribute('role', 'button'); d.style.animationDelay = (i * 35) + 'ms';
     d.appendChild(el('h3', '', p.title));
@@ -226,11 +227,44 @@ $('bgpick').onclick = async () => {
 $('bgclear').onclick = async () => { settings = await api.clearBackground(); applyLook(); $('bgmsg').textContent = 'Background removed.'; };
 
 api.onData(d => { data = d; $('rf').classList.remove('busy'); render(); });
+// Reddit communities: edited here, applied when Settings is saved.
+let rsubs = [], rdefaults = [];
+const rmsg = t => { $('rmsg').textContent = t; };
+function drawChips() {
+  const box = $('rchips'); box.textContent = '';
+  rsubs.forEach(name => {
+    const chip = el('span', 'pill', 'r/' + name), x = el('button', '', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Remove r/' + name);
+    x.onclick = () => { rsubs = rsubs.filter(n => n !== name); drawChips(); rmsg('Press Save to apply.'); $('rnew').focus(); };
+    chip.appendChild(x); box.appendChild(chip);
+  });
+}
+let rchecking = false, rmax = 10;
+async function addSub() {
+  if (rchecking) return;
+  const name = $('rnew').value.trim().replace(/^\/?r\//i, '');
+  if (!name) return rmsg('Type the name of a community.');
+  if (rsubs.some(n => n.toLowerCase() === name.toLowerCase())) return rmsg('That community is already in the list.');
+  if (rsubs.length >= rmax) return rmsg('You can follow up to ' + rmax + ' communities.');
+  rmsg('Checking…'); rchecking = true; $('radd').disabled = true;
+  let r; try { r = await api.redditCheckSub(name); } catch { r = { ok: null }; }
+  rchecking = false; $('radd').disabled = false;
+  if (r.ok === false) return rmsg(r.reason);
+  if (r.wait) return rmsg('Try again in a moment.');
+  rsubs.push(r.ok ? r.name : name); $('rnew').value = ''; drawChips();
+  rmsg(r.ok ? 'Added. Press Save to apply.' : "Added without checking, because Reddit couldn't be asked just now. Press Save to apply.");
+}
+$('radd').onclick = addSub;
+$('rnew').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); addSub(); } };
+$('rreset').onclick = () => { rsubs = rdefaults.slice(); drawChips(); rmsg('Press Save to apply.'); };
+
 // Fill the Settings form from saved settings.
 function fillForm(s) {
   $('c').value = NAMES[s.country] || ''; $('st').value = s.state; lastCode = s.country;
   document.querySelectorAll('#tl input').forEach(i => { i.checked = (s.topics || []).includes(i.value); });
   fillLists(); $('al').checked = s.alerts; $('su').checked = s.startup; $('rd').checked = s.reddit === true;
+  if (s.redditDefaults) rdefaults = s.redditDefaults;
+  if (s.redditMax) rmax = s.redditMax;
+  rsubs = (s.redditSubs || []).slice(); drawChips();
 }
 function setupDone(s) {
   settings = s; fillForm(s); showSettings(false); shownKey = ''; render();
@@ -255,9 +289,10 @@ $('save').onclick = async () => {
   $('err').textContent = '';
   const b = $('save'); b.disabled = true; b.textContent = 'Saving…';
   let ok = true;
-  try { settings = await api.setSettings({ country: code, state: reg, alerts: $('al').checked, startup: $('su').checked, reddit: $('rd').checked, topics: pickedTopics() }); } catch { ok = false; }
+  try { settings = await api.setSettings({ country: code, state: reg, alerts: $('al').checked, startup: $('su').checked, reddit: $('rd').checked, redditSubs: rsubs, topics: pickedTopics() }); } catch { ok = false; }
   b.disabled = false; b.textContent = 'Save';
   if (!ok) { $('err').textContent = 'Could not save. Try again.'; return; }
+  rsubs = (settings.redditSubs || []).slice(); drawChips(); rmsg('');
   showSettings(false); shownKey = ''; render();
 };
 buildTabs();

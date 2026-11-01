@@ -21,13 +21,18 @@
 <div class="g" id="topics" role="group" aria-labelledby="tpl"><span class="lb" id="tpl">Topics you want to see</span><div id="tl"></div><p class="note">Topics are matched by keyword, so a story can occasionally land in the wrong one. Each story has one topic, and shows when you picked it. Each tab fills from the best stories that fit.</p></div>
 <div class="g"><label class="row"><input type="checkbox" id="al"> Breaking news alerts</label><label class="row"><input type="checkbox" id="su"> Start with Windows</label></div>
 <div class="g" role="group" aria-labelledby="bnl"><span class="lb" id="bnl">Bonus (optional)</span>
-<label class="row"><input type="checkbox" id="rd"> Reddit tab: AI community discussion</label>
-<p class="note">Reddit posts (with a short text preview) and top comments from AI and coding communities (r/ClaudeAI, r/ChatGPT, r/OpenAI, r/LocalLLaMA, r/vibecoding, r/ClaudeCoding, r/BestGitHubRepos). Opinion, not verified news. Off by default. Reddit sees your IP address when this is on.</p>
+<label class="row"><input type="checkbox" id="rd"> Reddit tab: community discussion</label>
+<p class="note">Reddit posts (with a short text preview) and top comments from the communities you pick below (a few AI and coding ones to start with). Opinion, not verified news. Off by default. Reddit sees your IP address when this is on.</p>
+<div id="rsl" role="group" aria-labelledby="rsll"><span class="lb" id="rsll">Reddit communities (up to 10)</span>
+<div id="rchips"></div>
+<div class="row"><input class="inp" id="rnew" aria-label="Add a Reddit community" autocomplete="off" spellcheck="false" maxlength="30" placeholder="Add a community, e.g. technology"><button class="sec" id="radd" type="button">Add</button></div>
+<p class="note" id="rmsg" role="status"></p>
+<button class="sec" id="rreset" type="button">Use the default communities</button></div>
 <details><summary>How to set up</summary>
 <ol>
 <li>Tick the box above and press Save. No Reddit account, key or app is needed.</li>
 <li>Open the new Reddit tab. Posts appear within a few seconds; click a post to read a preview and its top comment, which the app fetches only then.</li>
-<li>The communities are fixed: r/ClaudeAI, r/ChatGPT, r/OpenAI, r/LocalLLaMA, r/vibecoding, r/ClaudeCoding, r/BestGitHubRepos. The app reads Reddit's public feeds for post titles, a short text preview and top comments, at most once every hour. The posts are the day's top ones. Reddit can see your IP address. Your topic choices apply here too.</li>
+<li>Pick your own communities in the list above (up to 10). Start with: r/ClaudeAI, r/ChatGPT, r/OpenAI, r/LocalLLaMA, r/vibecoding, r/ClaudeCoding, r/BestGitHubRepos. The app reads Reddit's public feeds for post titles, a short text preview and top comments, at most once every hour. The posts are the day's top ones. Reddit can see your IP address. Your topic choices apply here too.</li>
 <li>No posts? The tab says why Reddit could not be reached and when the app will try again. Reddit sometimes blocks a network (VPN, office or shared Wi-Fi), so try another network or wait an hour.</li>
 <li>To turn it off, untick the box and press Save. Requests stop right away.</li>
 </ol></details></div>

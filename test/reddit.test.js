@@ -30,7 +30,7 @@ const network = (hot = HOT) => {
 };
 const fresh = () => { // every scenario starts from clean module state
   for (const k of Object.keys(require.cache)) if (/src[\\/]reddit\.js$/.test(k)) delete require.cache[k];
-  const M = require('../src/reddit'); M.configure({ gap: 1, request: 200, fresh: 60 * 60000 }); return M;
+  const M = require('../src/reddit'); M.configure({ gap: 1, checkGap: 1, request: 200, fresh: 60 * 60000 }); return M;
 };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -147,6 +147,35 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const before = N.calls.length; out = await M.refresh([]);
   assert.ok(N.calls.length > before && out.length > 0, 'a re-enabled bonus with no posts loads again');
   assert.strictEqual(await M.refresh(out), out, 'but with posts on screen the hour still applies');
+
+  // the reader's own communities: names are validated, the list is combined into the one listing request, and changing it starts fresh
+  assert.deepStrictEqual(R.cleanSubs([' r/Foo_Bar ', 'foo_bar', 'x', '/r/Abc', 5, 'bad name', 'a'.repeat(22)]), ['Foo_Bar', 'Abc']);
+  assert.strictEqual(R.cleanSubs([]).length, 7, 'an empty list means the defaults'); assert.strictEqual(R.cleanSubs('nope').length, 7);
+  assert.strictEqual(R.cleanSubs(Array.from({ length: 30 }, (_, i) => 'sub' + i)).length, 10, 'at most 10 communities');
+  M = fresh(); N = network(); M.setFetch(N.fetch);
+  assert.strictEqual(M.setSubs(['ClaudeAI', 'technology']), true); assert.strictEqual(M.setSubs(['ClaudeAI', 'Technology']), false, 'same list (any case): nothing to redo');
+  out = await M.refresh([]); assert.ok(/\/r\/ClaudeAI\+technology\/top\.rss/.test(N.calls[0]), 'only the chosen communities are asked for: ' + N.calls[0]);
+  // with a few communities each one may bring more posts, up to the cap of 10
+  M = fresh(); M.setSubs(['ClaudeAI', 'ChatGPT']);
+  const many = (await new (require('rss-parser'))().parseString(listing(Array.from({ length: 12 }, (_, i) => raw('p' + i + 'xx', i % 2 ? 'ChatGPT' : 'ClaudeAI'))))).items;
+  const some = M.pickPosts(many); assert.strictEqual(some.length, 10); assert.strictEqual(some.filter(p => p.sub === 'ClaudeAI').length, 5);
+  // checking a name before it is added: found (with Reddit's spelling), not found, invalid, or "could not check"
+  const found = (u) => reply(u, 200, listing([raw('abc123', 'Technology')]));
+  M = fresh(); M.setFetch(async u => found(u)); assert.deepStrictEqual(await M.check('technology'), { ok: true, name: 'Technology' });
+  M = fresh(); M.setFetch(async u => reply(u, 200, listing([raw('abc123', 'SomethingElse')]))); assert.strictEqual((await M.check('nonexistentsub')).ok, false, 'a search-page redirect is not a community');
+  M = fresh(); M.setFetch(async u => reply(u, 200, listing([]))); assert.strictEqual((await M.check('emptysub')).ok, false);
+  M = fresh(); N = network(); M.setFetch(N.fetch); assert.strictEqual((await M.check('bad name!')).ok, false); assert.strictEqual(N.calls.length, 0, 'invalid names are never requested');
+  for (const code of [403, 404]) { M = fresh(); M.setFetch(async u => reply(u, code, 'no')); const r = await M.check('privatesub'); assert.strictEqual(r.ok, false, 'HTTP ' + code + ' means the community cannot be followed'); assert.match(r.reason, new RegExp('HTTP ' + code)); }
+  // a check that fails for any reason leaves the real listing's back-off and saved reason alone
+  for (const handler of [u => reply(u, 500, {}), u => reply(u, 403, 'no'), u => { throw new Error('ENOTFOUND'); }, u => reply(u, 200, '<html>captcha</html>')]) {
+    M = fresh(); M.restore({ lastAttempt: 0, blockedUntil: 0, backoffStep: 0, lastError: 'real problem' }); M.setFetch(async u => handler(u)); await M.check('technology');
+    assert.deepStrictEqual(M.snapshot(), { lastAttempt: 0, blockedUntil: 0, backoffStep: 0, lastError: 'real problem' }, 'check changed the back-off state');
+  }
+  M = fresh(); M.setFetch(async u => reply(u, 500, {})); assert.strictEqual((await M.check('technology')).ok, null, 'Reddit unreachable: may be added unchecked');
+  M = fresh(); N = network(); M.setFetch(N.fetch); M.restore({ lastAttempt: 0, blockedUntil: Date.now() + 36e5, backoffStep: 1 });
+  assert.strictEqual((await M.check('technology')).ok, null, 'during a back-off nothing is asked'); assert.strictEqual(N.calls.length, 0);
+  // two names added in quick succession: the second is told to wait (not added unchecked, not rejected)
+  M = fresh(); M.configure({ checkGap: 60000 }); M.setFetch(async u => found(u)); await M.check('technology'); assert.deepStrictEqual(await M.check('science'), { ok: null, wait: true });
 
   console.log('reddit tests passed'); process.exit(0);
 })().catch(e => { console.error(e); process.exit(1); });

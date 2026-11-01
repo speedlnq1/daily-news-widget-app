@@ -2,20 +2,38 @@
 // This is NOT news: it never enters the verified ranking and is exempt from the 2-outlet rule.
 // Shows what the posts say (title, a text preview, the top comment when a post is opened); nothing is generated.
 const Parser = require('rss-parser');
-const SUBS = ['ClaudeAI', 'ChatGPT', 'OpenAI', 'LocalLLaMA', 'vibecoding', 'ClaudeCoding', 'BestGitHubRepos'];
-const PER_SUB = 2, MAX_POSTS = 10; // posts kept per community / in total
-const LISTING_URL = `https://www.reddit.com/r/${SUBS.join('+')}/top.rss?t=day&limit=100`; // one request covers all communities; the feed has no vote counts, so "top of the day" is the ranking
+const DEFAULT_SUBS = ['ClaudeAI', 'ChatGPT', 'OpenAI', 'LocalLLaMA', 'vibecoding', 'ClaudeCoding', 'BestGitHubRepos'];
+const MAX_POSTS = 10, MAX_SUBS = 10; // posts kept in total / communities the reader may follow
+let SUBS = DEFAULT_SUBS.slice(); // the communities being read; the reader can change them in Settings
+const perSub = () => Math.max(2, Math.ceil(MAX_POSTS / SUBS.length)); // few communities: more posts from each
+const listingUrl = () => `https://www.reddit.com/r/${SUBS.join('+')}/top.rss?t=day&limit=100`; // one request covers all communities; the feed has no vote counts, so "top of the day" is the ranking
 const UA = 'windows:daily-news-widget:v1.0.0 (by /u/speedlnq1)'; // Reddit's documented <platform>:<app id>:<version> (by /u/<user>) format
-const CFG = { gap: 10000, request: 10000, fresh: 60 * 60000 }; // at most one comment request per 10 s
+const CFG = { gap: 10000, checkGap: 2000, request: 10000, fresh: 60 * 60000 }; // at most one comment request per 10 s
 const COMMENT_TTL = 3 * 36e5, EMPTY_TTL = 10 * 60000, MAX_BODY = 2e6;
 const parser = new Parser();
 let doFetch = (...a) => fetch(...a);
 let lastError = '', blockedUntil = 0, backoffStep = 0, running = null, lastAttempt = 0, epoch = 0, pullId = 0, curPull = 0, onState = () => {};
 const controllers = new Set();
 const comments = new Map(); // post id -> { at, text }; tiny, in memory
-let lastComment = 0;
+let lastComment = 0, lastCheck = 0;
 
 const setFetch = f => { doFetch = f; };
+// A subreddit name as Reddit allows it (3-21 letters, digits or _); "r/name" and "/r/name" are accepted. '' when invalid.
+const cleanName = n => { n = String(n == null ? '' : n).trim().replace(/^\/?r\//i, ''); return /^[A-Za-z0-9_]{3,21}$/.test(n) ? n : ''; };
+// The reader's list: valid names only, no repeats, at most MAX_SUBS; an empty list means the defaults.
+const cleanSubs = list => {
+  const out = [];
+  for (const n of (Array.isArray(list) ? list : []).slice(0, 50)) { const name = cleanName(n); if (name && !out.some(o => o.toLowerCase() === name.toLowerCase())) out.push(name); }
+  return out.length ? out.slice(0, MAX_SUBS) : DEFAULT_SUBS.slice();
+};
+const listKey = () => SUBS.join(); // lets the caller notice that the list changed while a pull was running
+// Switch communities. Returns true when the list changed: any pull in progress is dropped and the next one may start at once.
+function setSubs(list) {
+  const next = cleanSubs(list);
+  if (next.join().toLowerCase() === SUBS.join().toLowerCase()) return false;
+  SUBS = next; cancel(); lastAttempt = 0; // the caller saves the settings (and with them this state)
+  return true;
+}
 const configure = o => Object.assign(CFG, o);
 // Strip control/bidi characters and markdown noise, collapse whitespace, cap length. Output is only ever rendered via textContent.
 const clean = (s, max) => {
@@ -75,19 +93,19 @@ const httpReason = code => code === 401 || code === 403 ? `Reddit refused the re
 const describe = (e, timedOut) => timedOut ? 'Reddit did not answer in time' : e instanceof SyntaxError ? 'Reddit sent a web page instead of data' : e.message === 'unreadable' ? 'Reddit sent something unreadable' : e.message === 'big' ? 'Reddit\'s reply was too large' : 'Could not connect to Reddit';
 
 // One GET with a timeout covering fetch AND body. Resolves with the Atom feed's entries; every failure is recorded with its reason.
-async function getFeed(url) {
+async function getFeed(url, quiet = false) { // quiet: the failure is the caller's business and must not start a back-off
   const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), CFG.request);
   controllers.add(ctl);
   try {
     const res = await doFetch(url, { redirect: 'follow', signal: ctl.signal, headers: { 'User-Agent': UA, Accept: 'application/atom+xml' } });
-    if (new URL(res.url || url).protocol !== 'https:') { fail(0, 'Reddit redirected to a non-secure address'); throw new Error('http insecure'); }
-    if (!res.ok) { fail(res.headers && res.headers.get && res.headers.get('retry-after'), httpReason(res.status)); throw new Error('http ' + res.status); }
+    if (new URL(res.url || url).protocol !== 'https:') { if (!quiet) fail(0, 'Reddit redirected to a non-secure address'); throw new Error('http insecure'); }
+    if (!res.ok) { if (!quiet) fail(res.headers && res.headers.get && res.headers.get('retry-after'), httpReason(res.status)); throw Object.assign(new Error('http ' + res.status), { status: res.status }); }
     if (Number(res.headers.get('content-length') || 0) > MAX_BODY) throw new Error('big');
     const text = await readCapped(res, ctl.signal);
     if (!/<feed[\s>]/.test(text)) throw new SyntaxError('not a feed'); // a block page or captcha instead of the feed
     try { return (await parser.parseString(text)).items || []; } catch { throw new Error('unreadable'); } // looks like a feed but is not valid XML
   } catch (e) {
-    if (!/^http /.test(e.message) && !ctl.cancelled) fail(0, describe(e, ctl.signal.aborted)); // timeout, oversize, HTML/captcha page, network error
+    if (!quiet && !/^http /.test(e.message) && !ctl.cancelled) fail(0, describe(e, ctl.signal.aborted)); // timeout, oversize, HTML/captcha page, network error
     throw e;
   } finally { clearTimeout(timer); controllers.delete(ctl); } // the timer covers fetch AND body, and never leaks
 }
@@ -98,19 +116,19 @@ const plain = (html, max) => clean(String(html || '').replace(/<[^>]*>/g, ' ').r
 // The post's own text for the preview card: the body of a text post, empty for a link or image post.
 const preview = html => { const m = /<div class="md">([\s\S]*?)<\/div>/.exec(String(html || '')); return m ? plain(m[1].replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ').replace(/<\/p>/g, ' '), 400) : ''; };
 
-// Keeps posts from the listed communities, at most PER_SUB from each, interleaved so a big community can't crowd out the others.
+// Keeps posts from the listed communities, a few from each, interleaved so a big community can't crowd out the others.
 // Community and id come from the post's own link; anything that is not a Reddit comments link is dropped.
 function pickPosts(entries) {
   const bySub = new Map(SUBS.map(name => [name, []]));
   for (const e of Array.isArray(entries) ? entries : []) {
     const m = e && /^https:\/\/www\.reddit\.com(\/r\/([A-Za-z0-9_]{2,30})\/comments\/([a-z0-9]{3,10})\/[^\s?#]{0,200})$/.exec(String(e.link));
     const sub = m && SUBS.find(name => name.toLowerCase() === m[2].toLowerCase());
-    if (!sub || bySub.get(sub).length >= PER_SUB) continue;
+    if (!sub || bySub.get(sub).length >= perSub()) continue;
     const post = { id: m[3], sub, title: clean(e.title, 200), text: preview(e.content), ts: Date.parse(e.isoDate || e.pubDate || '') || 0, link: safeLink(m[1]) };
     if (post.title && post.link) bySub.get(sub).push(post);
   }
   const posts = [];
-  for (let i = 0; i < PER_SUB; i++) for (const list of bySub.values()) if (list[i]) posts.push(list[i]);
+  for (let i = 0; i < perSub(); i++) for (const list of bySub.values()) if (list[i]) posts.push(list[i]);
   return posts.slice(0, MAX_POSTS);
 }
 
@@ -135,9 +153,30 @@ async function comment(link) {
   } catch { lastError = ''; onState(); return ''; } // the posts are fine, only the comment is missing: no scary message, saved or shown
 }
 
+// Asked when the reader adds a community: does r/name exist and have public posts? One request, with its own spacing,
+// and it never touches the back-off or the saved error of the real listing.
+// { ok: true, name } with Reddit's own spelling, { ok: false, reason }, or { ok: null, wait } when it could not be checked
+// (wait: asked again too soon; otherwise Reddit is unreachable or backing off, so the name may be added unchecked).
+async function check(name) {
+  name = cleanName(name);
+  if (!name) return { ok: false, reason: 'A community name has 3 to 21 letters, digits or underscores.' };
+  if (Date.now() - lastCheck < CFG.checkGap) return { ok: null, wait: true };
+  if (Date.now() < blockedUntil) return { ok: null };
+  lastCheck = Date.now();
+  try {
+    for (const e of await getFeed(`https://www.reddit.com/r/${name}/top.rss?t=month&limit=5`, true)) {
+      const m = new RegExp('^https://www\\.reddit\\.com/r/(' + name + ')/comments/', 'i').exec(String(e.link)); // a missing community is redirected to a search page, whose links look different
+      if (m) return { ok: true, name: m[1] };
+    }
+    return { ok: false, reason: 'r/' + name + ' has no public posts, or does not exist.' };
+  } catch (e) {
+    return e.status === 403 || e.status === 404 ? { ok: false, reason: 'r/' + name + ' is private, banned or does not exist (Reddit answered HTTP ' + e.status + ').' } : { ok: null };
+  }
+}
+
 // Fetches the listing and returns the posts, or null when nothing usable came back (the caller keeps the previous list).
 async function pull(my, onPosts) {
-  const posts = pickPosts(await getFeed(LISTING_URL));
+  const posts = pickPosts(await getFeed(listingUrl()));
   if (my !== epoch) return null;
   if (!posts.length) { fail(0, 'Reddit had no suitable posts'); return null; } // an empty answer counts as a failure: back off
   lastError = ''; backoffStep = 0; onState();
@@ -171,4 +210,4 @@ const valid = l => (Array.isArray(l) ? l : []).slice(0, MAX_POSTS).map(p => p &&
 const state = () => ({ blockedUntil, lastAttempt, backoffStep, running: !!running });
 const onChange = f => { onState = f; };
 
-module.exports = { valid, snapshot, restore, status, onChange, refresh, comment, cancel, setFetch, configure, clean, safeLink, pickPosts, state };
+module.exports = { valid, snapshot, restore, status, onChange, refresh, comment, check, setSubs, cleanSubs, listKey, MAX_SUBS, cancel, setFetch, configure, clean, safeLink, pickPosts, state };

@@ -135,3 +135,4 @@ body.setup .rail,body.setup #rf,body.setup #fw{display:none}
 @media (prefers-reduced-motion:reduce){.s,#set,.empty,.sheet,#wb{animation-name:fade}.sk{animation:none}#wp i{transition:none}*{transition-property:background-color,color,border-color!important}}
 
 #cs{white-space:pre-line}
+#rchips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}#rchips .pill{display:inline-flex;align-items:center;gap:4px}#rchips button{border:0;background:none;padding:0 2px;font-size:13px;line-height:1}#rsl .row{margin-top:4px}#rsl .row .inp{flex:1}.rhead{display:flex;justify-content:space-between;align-items:center;gap:8px}

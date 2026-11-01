@@ -3,7 +3,21 @@
 [![Build, test and measure](https://github.com/speedlnq1/daily-news-widget-app/actions/workflows/build.yml/badge.svg)](https://github.com/speedlnq1/daily-news-widget-app/actions/workflows/build.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-A small Windows tray widget that keeps you caught up: **the top 10 stories** on each tab (World, Country, Local, AI & Tech), refreshed daily, with a notification when something big breaks. No account, no API keys, no AI, no tracking. Free and open source.
+<p align="center"><img src="docs/screenshots/overview.png" alt="Daily News Widget in dark, picture-background, story-card and light looks" width="100%"></p>
+
+**Ten stories per tab. No feed, no noise, nothing to log in to.** Daily News Widget is a small, free, open-source Windows tray widget that keeps you caught up on **World, Country, Local and AI & Tech** news. It starts with Windows, refreshes through the day, ranks stories by impact, shows only stories that independent outlets agree on, and sends one notification when something big breaks. No account, no API keys, no AI at run time, no tracking.
+
+**Who it is for:** people who want to know what happened without opening a news feed, and who like software they can read and check.
+
+**In 30 seconds:**
+1. Install it and pick your country, region and the topics you care about (one question per screen).
+2. A glass widget lives in your tray. Open it and press a tab: World, Country, Local, AI & Tech.
+3. Click a story for a card with the headline, a short summary, every outlet covering it and a **Go to source** button.
+4. If something major breaks and 3+ trusted outlets carry it, you get one notification.
+
+**[Download for Windows](https://github.com/speedlnq1/daily-news-widget-app/releases)** · free · MIT licence · unsigned pre-release (see [Download](#download) for the SmartScreen note)
+
+_Screenshots on this page use made-up sample headlines and outlet names, because real news changes every hour._
 
 > **Status: pre-release.** The installer is not yet code-signed, so Windows will show an "unknown publisher" warning and **auto-update is switched off**. See [Download](#download).
 
@@ -36,6 +50,18 @@ A small Windows tray widget that keeps you caught up: **the top 10 stories** on 
 
 More detail on every feature: [docs/GUIDE.md](docs/GUIDE.md).
 
+## Screenshots
+
+<p align="center"><img src="docs/screenshots/tabs.png" alt="Country, Local, AI & Tech and Reddit tabs" width="100%"></p>
+
+| Dark glass | Light | Your own background picture |
+| --- | --- | --- |
+| <img src="docs/screenshots/world-dark.png" alt="World tab, dark" width="260"> | <img src="docs/screenshots/world-light.png" alt="World tab, light" width="260"> | <img src="docs/screenshots/world-picture.png" alt="World tab over a background picture" width="260"> |
+
+| Story card | Settings | Pick your Reddit communities |
+| --- | --- | --- |
+| <img src="docs/screenshots/story-card.png" alt="Story card with outlets and Go to source" width="260"> | <img src="docs/screenshots/settings.png" alt="Settings: background, blur, text colour, look" width="260"> | <img src="docs/screenshots/settings-reddit.png" alt="Settings: Reddit tab and communities" width="260"> |
+
 ## What makes it different
 
 - **It shows ten things, not a feed.** No infinite scroll, no engagement bait, no ads. When you have read the ten, you are done.
@@ -48,7 +74,7 @@ More detail on every feature: [docs/GUIDE.md](docs/GUIDE.md).
 
 ## Download
 
-Installers are published on the [Releases page](https://github.com/speedlnq1/daily-news-widget-app/releases) (latest release: v1.0.0, an unsigned pre-release).
+Installers are published on the [Releases page](https://github.com/speedlnq1/daily-news-widget-app/releases) (latest release: v1.0.1, an unsigned pre-release).
 
 1. Download `Daily-News-Widget-Setup-<version>.exe` and `SHA256SUMS.txt` from the latest release.
 2. **Verify it** (optional but recommended). In PowerShell: `Get-FileHash .\Daily-News-Widget-Setup-<version>.exe -Algorithm SHA256` and compare with the line in `SHA256SUMS.txt`.

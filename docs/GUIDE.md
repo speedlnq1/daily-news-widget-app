@@ -22,8 +22,8 @@ Reddit tab: a separate tab (only shown when the bonus is on) lists the day's top
 ### Set up the Reddit bonus (optional)
 **Status: experimental and unverified on a normal PC.** Reddit blocks cloud servers, so this could only be tested against a simulated Reddit, not the live site. Please try it on your own PC and report whether posts appear.
 
-1. Open Settings (the gear), tick **Reddit tab: AI community discussion** under Bonus, press Save. No account is needed to try.
+1. Open Settings (the gear), tick **Reddit tab: community discussion** under Bonus, press Save. No account is needed to try.
 2. Open the new **Reddit** tab. Posts appear within a few seconds; click a post to see a text preview and its top comment (fetched only then, never more than one every 10 seconds).
-3. The communities are fixed (r/ClaudeAI, r/ChatGPT, r/OpenAI, r/LocalLLaMA, r/vibecoding, r/ClaudeCoding, r/BestGitHubRepos). To change them, edit `SUBS` in `src/reddit.js`. The app reads only public post titles, a short text preview and top comments, at most once every hour. Reddit can see your IP address. Your topic choices apply.
+3. It starts with seven AI and coding communities (r/ClaudeAI, r/ChatGPT, r/OpenAI, r/LocalLLaMA, r/vibecoding, r/ClaudeCoding, r/BestGitHubRepos). Change them in Settings > Bonus (or with the gear on the Reddit tab): add up to 10 communities, remove any, or reset to the defaults. Adding one makes a single check request (a private or missing community is refused) so a typo can't break the tab, and saving a changed list loads it right away (one request). The app reads only public post titles, a short text preview and top comments, at most once every hour. Reddit can see your IP address. Your topic choices apply.
 4. No posts showing? The tab says why Reddit could not be reached and when the app will try again. Reddit may be blocking the network (VPN, office or shared Wi-Fi); try again in an hour or elsewhere.
 5. To turn it off, untick the box and press Save. Requests stop immediately.

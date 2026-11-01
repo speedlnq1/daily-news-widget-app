@@ -39,7 +39,7 @@ function sanitize(s, base) {
   s = s || {};
   const country = GEO.validCountry(s.country) ? s.country : base.country;
   const region = GEO.hasRegions(country) && GEO.validRegion(country, String(s.state || '')) ? String(s.state || '') : '';
-  return { configured: !!s.configured, country, state: region, alerts: s.alerts !== false, startup: s.startup !== false, topics: TOPICS.fromSettings(s), reddit: s.reddit === true,
+  return { configured: !!s.configured, country, state: region, alerts: s.alerts !== false, startup: s.startup !== false, topics: TOPICS.fromSettings(s), reddit: s.reddit === true, redditSubs: Reddit.cleanSubs(s.redditSubs),
     theme: s.theme === 'light' ? 'light' : 'dark', textColor: ['light', 'dark'].includes(s.textColor) ? s.textColor : 'auto',
     blur: typeof s.blur === 'number' && s.blur >= 0 ? Math.min(40, Math.round(s.blur)) : 24, bg: s.bg === 'light' || s.bg === 'dark' ? s.bg : '' }; // bg: tone of the picture, '' = none
 }
@@ -57,6 +57,7 @@ function load() {
     settings = sanitize({ ...DEFAULTS, ...j.settings }, DEFAULTS); seen = new Set(Array.isArray(j.seen) ? j.seen.filter(x => typeof x === 'string') : []);
     lastDaily = typeof j.lastDaily === 'string' ? j.lastDaily : ''; data = cleanData(j.data);
     if (data && !data.picks) data.picks = settings.topics.join(','); // cache saved before topic picks existed
+    Reddit.setSubs(settings.redditSubs);
     if (data) data.reddit = Reddit.valid(j.data && j.data.reddit);
     Reddit.restore(j.rstate);
     if (settings.bg && !fs.existsSync(bgFile())) settings.bg = ''; // the picture is gone from disk
@@ -74,7 +75,7 @@ function readBackground() {
   try { return 'data:image/jpeg;base64,' + fs.readFileSync(bgFile()).toString('base64'); } catch { return ''; }
 }
 // What the window gets: the saved settings plus the picture itself.
-const view = () => ({ ...settings, bgUrl: settings.bg ? readBackground() : '' });
+const view = () => ({ ...settings, bgUrl: settings.bg ? readBackground() : '', redditDefaults: Reddit.cleanSubs([]), redditMax: Reddit.MAX_SUBS });
 
 function createWindow() {
   const room = screen.getPrimaryDisplay().workAreaSize.height; // small screens at high zoom: shrink the height, the list scrolls
@@ -159,13 +160,15 @@ async function doRefresh(daily) {
 // runs in the background so a slow Reddit never delays the news refresh.
 function redditKick() {
   if (!settings.reddit || !settings.topics.length || !data) return; // nothing picked: no Reddit request either
+  const key = Reddit.listKey();
   const show = list => {
-    if (!settings.reddit || !data) return;
+    if (!settings.reddit || !data || Reddit.listKey() !== key) return; // the reader switched communities meanwhile: these posts are for the old list
     data.reddit = list; data.redditStatus = Reddit.status(list.length > 0); save();
     push('data', lastError ? { ...data, error: 'offline' } : data);
   };
   const before = data.reddit || [];
   Reddit.refresh(before, show).then(list => {
+    if (Reddit.listKey() !== key) return;
     if (list !== before || JSON.stringify(Reddit.status(list.length > 0)) !== JSON.stringify(data && data.redditStatus)) show(list); // new posts, or a new reason to show
   }).catch(() => {});
 }
@@ -235,18 +238,21 @@ if (gotLock) app.whenReady().then(() => {
 });
 
 ipcMain.handle('get-settings', () => view());
+ipcMain.handle('reddit-check-sub', (_e, name) => Reddit.check(name)); // when the reader adds a community (also before the bonus is saved on)
 ipcMain.handle('reddit-comment', (_e, link) => (settings.reddit ? Reddit.comment(link) : '')); // the top comment of a post the reader opened
 ipcMain.handle('set-settings', async (_e, s) => {
   s = s || {};
   const old = settings;
-  settings = sanitize({ ...settings, country: s.country, state: s.state, alerts: !!s.alerts, startup: !!s.startup, topics: s.topics, reddit: s.reddit === true, configured: true }, settings); // the look is kept as it was
+  settings = sanitize({ ...settings, country: s.country, state: s.state, alerts: !!s.alerts, startup: !!s.startup, topics: s.topics, reddit: s.reddit === true, redditSubs: s.redditSubs || settings.redditSubs, configured: true }, settings); // the look is kept as it was
+  const subsChanged = Reddit.setSubs(settings.redditSubs); // other communities: the old posts no longer fit
+  if (subsChanged && data) { data.reddit = []; data.redditStatus = undefined; }
   if (!settings.reddit) { Reddit.cancel(); if (data) { data.reddit = []; data.redditStatus = undefined; } } // turning it off aborts any pull in progress
   else if (!settings.topics.length) Reddit.cancel(); // nothing picked: stop asking Reddit too
   setLogin();
   save();
   if (inflight) await inflight.catch(() => {});
   await refresh(true);
-  if (settings.reddit && !old.reddit) redditKick(); // still subject to the hourly throttle; saving settings never forces a pull
+  if (settings.reddit && (!old.reddit || subsChanged)) redditKick(); // still subject to the hourly throttle and any back-off, except that a changed list may load at once
   return view();
 });
 // Look settings change on their own, right away, and never trigger a news refresh.
