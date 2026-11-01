@@ -1,0 +1,71 @@
+name: Release (dry run by default)
+# Builds the installer and SHA256 checksums when a version tag (v1.2.3) is pushed.
+# NOTHING is published unless the repository variable PUBLISH_RELEASES is set to "true".
+# Until the maintainer approves, every run is a dry run: the files are only kept as a workflow artifact.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm test
+      - run: npm audit --omit=dev
+      - name: Check the tag matches package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env: { TAG: '${{ github.ref_name }}' }
+        run: |
+          $v = (Get-Content package.json | ConvertFrom-Json).version
+          if ("v$v" -ne $env:TAG) { throw "Tag $env:TAG does not match package.json version $v" }
+      - name: Build installer (never publishes from here)
+        run: npx electron-builder --win nsis --publish never
+        env: { CSC_IDENTITY_AUTO_DISCOVERY: 'false' }
+      - name: SHA256 checksums
+        shell: pwsh
+        run: |
+          Set-Location dist
+          $lines = Get-ChildItem Daily-News-Widget-Setup-*.exe | ForEach-Object {
+            $h = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$h  $($_.Name)"
+          }
+          # LF line endings so `sha256sum -c` works on Linux and macOS too
+          [IO.File]::WriteAllText("$PWD/SHA256SUMS.txt", (($lines -join "`n") + "`n"))
+          Get-Content SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-files
+          path: |
+            dist/Daily-News-Widget-Setup-*.exe
+            dist/SHA256SUMS.txt
+
+  publish:
+    # Skipped (dry run) unless the maintainer sets the repository variable PUBLISH_RELEASES=true.
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v') && vars.PUBLISH_RELEASES == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: release-files, path: release }
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh release create "$TAG" release/* \
+            --repo "$REPO" \
+            --title "$TAG" \
+            --prerelease \
+            --notes "Unsigned pre-release: Windows SmartScreen will show an unknown-publisher warning and there are no automatic updates yet. Verify the download against SHA256SUMS.txt. The news in the app is automated and not fact-checked."

@@ -1,0 +1,11 @@
+name: Feature or feed request
+description: "Suggest a feature, an outlet or a country/region feed"
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes: { label: "What would you like?", description: "For a feed: the outlet, its RSS URL and the country/region it covers" }
+    validations: { required: true }
+  - type: textarea
+    id: why
+    attributes: { label: "Why is it useful?" }

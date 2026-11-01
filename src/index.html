@@ -1,0 +1,49 @@
+<!doctype html><html lang="en" data-theme="dark" data-text="light"><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'">
+<title>Daily News</title>
+<link rel="stylesheet" href="style.css">
+</head><body>
+<div id="app">
+<aside class="rail"><div id="tabs" role="tablist" aria-orientation="vertical" aria-label="News sections"></div><div class="dock" id="dock"></div></aside>
+<div class="main">
+<header><div><p>Daily News</p><h1 id="title"></h1></div><button class="ib" id="rf" title="Refresh" aria-label="Refresh"></button><button class="ib" id="x" title="Hide" aria-label="Hide"></button></header>
+<main id="list"></main>
+<div id="set">
+<div class="g"><span class="lb">Background</span><div class="row"><div class="thumb" id="thumb" aria-hidden="true"></div>
+<div><button class="btn" id="bgpick">Upload image</button> <button class="btn" id="bgclear" hidden>Remove</button><p class="hint" id="bgmsg" role="status" style="margin-top:6px">JPG or PNG. Stays on your PC.</p></div></div></div>
+<div class="g"><label class="lb" for="blur">Blur</label><input id="blur" type="range" min="0" max="40" step="1"><div class="vals"><span>Clear</span><span>Frosted</span></div></div>
+<div class="g"><span class="lb" id="tcl">Text color</span><div class="seg" id="tc" role="group" aria-labelledby="tcl" aria-describedby="tchint"></div><p class="hint" id="tchint" style="margin-top:6px"></p></div>
+<div class="g"><span class="lb" id="thl">Look</span><div class="seg" id="th" role="group" aria-labelledby="thl"></div></div>
+<div class="g"><span class="lb">Location (for Country and Local news)</span>
+<label class="note" for="c" style="margin:0 0 4px;display:block">Country</label><input class="inp" id="c" list="cl" autocomplete="off" placeholder="Type to search…"><datalist id="cl"></datalist>
+<label class="note" for="st" style="margin:8px 0 4px;display:block">State / region</label><input class="inp" id="st" list="rl" autocomplete="off" placeholder="Type to search…"><datalist id="rl"></datalist>
+<p class="err" id="err" role="alert"></p></div>
+<div class="g" id="topics" role="group" aria-labelledby="tpl"><span class="lb" id="tpl">Topics you want to see</span><div id="tl"></div><p class="note">Topics are matched by keyword, so a story can occasionally land in the wrong one. Each story has one topic, and shows when you picked it. Each tab fills from the best stories that fit.</p></div>
+<div class="g"><label class="row"><input type="checkbox" id="al"> Breaking news alerts</label><label class="row"><input type="checkbox" id="su"> Start with Windows</label></div>
+<div class="g" role="group" aria-labelledby="bnl"><span class="lb" id="bnl">Bonus (optional)</span>
+<label class="row"><input type="checkbox" id="rd"> Reddit tab: AI community discussion</label>
+<p class="note">Reddit posts (with a short text preview) and top comments from AI and coding communities (r/ClaudeAI, r/ChatGPT, r/OpenAI, r/LocalLLaMA, r/vibecoding, r/ClaudeCoding, r/BestGitHubRepos). Opinion, not verified news. Off by default. Reddit sees your IP address when this is on.</p>
+<details><summary>How to set up</summary>
+<ol>
+<li>Tick the box above and press Save. No Reddit account, key or app is needed.</li>
+<li>Open the new Reddit tab. Posts appear within a few seconds; click a post to read a preview and its top comment, which the app fetches only then.</li>
+<li>The communities are fixed: r/ClaudeAI, r/ChatGPT, r/OpenAI, r/LocalLLaMA, r/vibecoding, r/ClaudeCoding, r/BestGitHubRepos. The app reads Reddit's public feeds for post titles, a short text preview and top comments, at most once every hour. The posts are the day's top ones. Reddit can see your IP address. Your topic choices apply here too.</li>
+<li>No posts? The tab says why Reddit could not be reached and when the app will try again. Reddit sometimes blocks a network (VPN, office or shared Wi-Fi), so try another network or wait an hour.</li>
+<li>To turn it off, untick the box and press Save. Requests stop right away.</li>
+</ol></details></div>
+<p class="note" style="margin:0 2px">Stories appear only when 2+ trusted outlets carry them (wire-sharing outlets count once). This filters out junk but is not fact-checking. Order is a heuristic: outlet reach plus severity keywords, then recency.</p>
+<p class="note about" style="margin:0 2px">Daily News Widget is free, open-source software (MIT licence) by <b>speedlnq1</b>. Source and feedback: github.com/speedlnq1/daily-news-widget-app. News is collected automatically from public feeds and is not fact-checked.</p>
+<button class="pri go" id="save">Save</button>
+</div>
+<div id="wiz">
+<div id="wp" role="progressbar" aria-label="Setup progress" aria-valuemin="0" aria-valuemax="100"><i></i></div>
+<div id="wpt"></div>
+<div id="wb"></div>
+<p class="wfoot">Everything stays on your PC. <button id="priv">Privacy details</button></p>
+</div>
+<footer id="fw"><i></i><span id="ft">Loading…</span></footer>
+</div>
+<div id="card" hidden><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="ct"><h2 id="ct"></h2><div class="m" id="cm"></div><p id="cs"></p><div class="lbl" id="cbl">Covered by</div><ul id="co"></ul>
+<div class="acts"><button class="sec" id="cc">Close</button><button class="pri go" id="cg">Go to source ↗</button></div></div></div>
+</div>
+<script src="geo.js"></script><script src="topics.js"></script><script src="setup-steps.js"></script><script src="renderer.js"></script><script src="setup.js"></script></body></html>

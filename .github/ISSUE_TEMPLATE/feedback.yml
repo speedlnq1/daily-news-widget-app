@@ -1,0 +1,15 @@
+name: Feedback or review
+description: "Tell us what you think, good or bad"
+labels: [feedback]
+body:
+  - type: dropdown
+    id: rating
+    attributes:
+      label: "Overall, how is it?"
+      options: ["Love it", "Good", "Okay", "Needs work"]
+  - type: textarea
+    id: liked
+    attributes: { label: "What works well?" }
+  - type: textarea
+    id: better
+    attributes: { label: "What should be better?" }

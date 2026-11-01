@@ -1,0 +1,113 @@
+name: Build, test and measure
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm test
+      - run: npm audit --omit=dev
+
+  build:
+    # Windows minutes are limited: on a pull request the heavy jobs run only with the full-ci label.
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Build unpacked app and NSIS installer
+        run: npx electron-builder --win nsis --publish never
+        env: { CSC_IDENTITY_AUTO_DISCOVERY: 'false' }
+      - uses: actions/upload-artifact@v4
+        with: { name: DailyNewsWidget-Setup, path: dist/*.exe }
+      - uses: actions/upload-artifact@v4
+        with: { name: win-unpacked, path: dist/win-unpacked }
+
+  measure:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: win-unpacked, path: dist/win-unpacked }
+      - name: Measure idle RAM and CPU of the packaged app
+        shell: pwsh
+        run: |
+          ./scripts/measure.ps1 -Exe "$PWD\dist\win-unpacked\Daily News Widget.exe" | Tee-Object measure.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: measurements, path: measure.txt }
+
+  live-feeds:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Fetch real feeds, rank, report
+        run: node scripts/live-test.js live-report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: live-feed-report, path: live-report.* }
+
+  e2e:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: actions/download-artifact@v4
+        with: { name: DailyNewsWidget-Setup, path: setup }
+      - name: Silent-install the real installer
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem setup -Filter *.exe | Select-Object -First 1
+          Start-Process -FilePath $setup.FullName -ArgumentList '/S' -Wait
+          $exe = Get-ChildItem "$env:LOCALAPPDATA\Programs" -Recurse -Filter 'Daily News Widget.exe' | Select-Object -First 1
+          if (-not $exe) { throw 'installed exe not found under %LOCALAPPDATA%\Programs' }
+          "Installed at $($exe.FullName)"
+          "E2E_EXE=$($exe.FullName)" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          $lnk = Get-ChildItem "$env:APPDATA\Microsoft\Windows\Start Menu\Programs" -Recurse -Filter 'Daily News Widget*.lnk' -ErrorAction SilentlyContinue
+          "Start-menu shortcut: $($lnk.FullName)"
+      - run: npm ci
+      - run: npm install --no-save --no-package-lock playwright-core@1.59.1
+      - name: Diagnostic - can the runner reach each feed?
+        run: node scripts/feedcheck.js
+        continue-on-error: true
+      - name: End-to-end tests on the installed app
+        run: node test/e2e.js
+        env: { E2E_OUT: e2e-out }
+      - name: Uninstall and verify nothing is left behind
+        if: always()
+        shell: pwsh
+        run: |
+          if (-not $env:E2E_EXE) { throw 'install step did not complete, nothing to uninstall' }
+          $dir = Split-Path $env:E2E_EXE
+          $u = Get-ChildItem $dir -Filter 'Uninstall*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $u) { throw "no uninstaller found in $dir" }
+          Start-Process $u.FullName -ArgumentList '/S' -Wait
+          # NSIS copies the uninstaller to temp and exits early; wait for the folder to disappear
+          $deadline = (Get-Date).AddSeconds(60)
+          while ((Test-Path $dir) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
+          if (Test-Path $dir) { Get-ChildItem $dir -Recurse | Select-Object -First 20 FullName; throw "install dir still present after uninstall: $dir" }
+          "uninstalled cleanly"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: e2e-screenshots, path: e2e-out }

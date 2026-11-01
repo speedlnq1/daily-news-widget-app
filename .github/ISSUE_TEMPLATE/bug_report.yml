@@ -1,0 +1,20 @@
+name: Bug report
+description: "Something is broken or looks wrong"
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "Thanks for reporting. Please do not include personal information. For security problems use a private security advisory instead (see SECURITY.md)."
+  - type: textarea
+    id: what
+    attributes: { label: "What happened?", description: "What you saw and what you expected" }
+    validations: { required: true }
+  - type: textarea
+    id: steps
+    attributes: { label: "Steps to reproduce" }
+  - type: input
+    id: place
+    attributes: { label: "Country / region set in the app", description: "Only if it matters (for example a wrong story on the Country or Local tab)" }
+  - type: input
+    id: version
+    attributes: { label: "App version and Windows version" }

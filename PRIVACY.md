@@ -1,0 +1,11 @@
+# Privacy
+- No accounts, no analytics, no telemetry, no crash reporting, no API keys.
+- Your country, state and preferences are stored only in a local file on your PC (the app's user-data folder). They are never sent to us; there is no "us" server.
+- The app downloads public RSS feeds directly from news outlets (BBC, NPR, The Guardian, NYT, Sky News, The Independent, CBC and similar; the full list is `TRUSTED` in `src/sources.js`). Those sites can see your IP address, as with any website visit.
+- The Local tab (regions exist for the US, Canada, Australia, UK, India, New Zealand, South Africa and Germany) searches Google News for your region's name, and for every country except the US and UK the Country tab also searches Google News for your country's name. Google receives that text, not your name or identity. Leave Region blank to avoid the first; the second can't be turned off for those countries.
+- If the optional "Reddit AI discussion" bonus is on (off by default; a bonus you can turn on), the app also downloads public posts (title, a short text preview which is stored on your PC) and top comments (Reddit's public RSS feeds; the request carries an app name like "windows:daily-news-widget:v1.0.0 (by /u/speedlnq1)" as its User-Agent) from a few AI subreddits (r/ClaudeAI, r/ChatGPT, r/OpenAI, r/LocalLLaMA, r/vibecoding, r/ClaudeCoding, r/BestGitHubRepos) directly from reddit.com, no login, at most once every hour (remembered across restarts). Reddit can see your IP address. Turn it off in Settings and no request to Reddit is made.
+- Clicking a story opens it in your normal browser.
+- Auto-update is switched off until the installer is code-signed, so for now the app does not contact GitHub at all. Once enabled, it will check this project's GitHub Releases page for new versions (GitHub sees your IP address).
+- The app is open source (MIT): you can read exactly what it does in `src/`.
+- The news shown is collected automatically from public feeds and is not fact-checked.
+- A background picture you choose in Settings is copied (shrunk) into the app's own data folder on your PC and is never uploaded. Remove it in Settings and the copy is deleted. The font is bundled, so nothing is downloaded for the look.
