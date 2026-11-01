@@ -1,11 +1,23 @@
 name: Release (dry run by default)
-# Builds the installer and SHA256 checksums when a version tag (v1.2.3) is pushed.
-# NOTHING is published unless the repository variable PUBLISH_RELEASES is set to "true".
-# Until the maintainer approves, every run is a dry run: the files are only kept as a workflow artifact.
+# Builds the installer and SHA256 checksums.
+# Publishing a GitHub release happens only when the maintainer asks for it, in one of two ways:
+#   - pushing a version tag (v1.2.3) while the repository variable PUBLISH_RELEASES is "true", or
+#   - running this workflow by hand (Actions tab) with "publish" ticked and the tag to create.
+# Every other run is a dry run: the files are only kept as a workflow artifact.
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to create, for example v1.0.0 (must match package.json version)'
+        required: false
+        type: string
+      publish:
+        description: 'Publish a GitHub release (leave off for a dry run)'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -21,9 +33,9 @@ jobs:
       - run: npm test
       - run: npm audit --omit=dev
       - name: Check the tag matches package.json
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish)
         shell: pwsh
-        env: { TAG: '${{ github.ref_name }}' }
+        env: { TAG: '${{ inputs.tag || github.ref_name }}' }
         run: |
           $v = (Get-Content package.json | ConvertFrom-Json).version
           if ("v$v" -ne $env:TAG) { throw "Tag $env:TAG does not match package.json version $v" }
@@ -49,9 +61,9 @@ jobs:
             dist/SHA256SUMS.txt
 
   publish:
-    # Skipped (dry run) unless the maintainer sets the repository variable PUBLISH_RELEASES=true.
+    # Skipped (dry run) unless the maintainer asked for a release (see the top of this file).
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v') && vars.PUBLISH_RELEASES == 'true'
+    if: (startsWith(github.ref, 'refs/tags/v') && vars.PUBLISH_RELEASES == 'true') || (github.event_name == 'workflow_dispatch' && inputs.publish && inputs.tag != '')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -61,11 +73,22 @@ jobs:
       - name: Create the GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ inputs.tag || github.ref_name }}
           REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
         run: |
+          cat > notes.md <<'NOTES'
+          **Unsigned pre-release of the Windows installer.**
+
+          - **Windows SmartScreen will warn "Unknown publisher".** The installer is not code-signed yet. If you trust this source and the checksum below matches, choose *More info > Run anyway*. Or build it from source (see the README).
+          - **No automatic updates yet.** Install newer releases by hand.
+          - **Verify your download:** compare `Get-FileHash .\Daily-News-Widget-Setup-<version>.exe -Algorithm SHA256` in PowerShell with the line in `SHA256SUMS.txt`.
+          - **The news is automated and not fact-checked.** Stories are collected from public feeds of trusted outlets and ranked with simple rules. Always read the source.
+          - Windows only. Free and open source (MIT).
+          NOTES
           gh release create "$TAG" release/* \
             --repo "$REPO" \
-            --title "$TAG" \
+            --target "$SHA" \
+            --title "Daily News Widget $TAG" \
             --prerelease \
-            --notes "Unsigned pre-release: Windows SmartScreen will show an unknown-publisher warning and there are no automatic updates yet. Verify the download against SHA256SUMS.txt. The news in the app is automated and not fact-checked."
+            --notes-file notes.md

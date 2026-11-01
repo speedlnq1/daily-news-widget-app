@@ -48,7 +48,7 @@ More detail on every feature: [docs/GUIDE.md](docs/GUIDE.md).
 
 ## Download
 
-Installers are published on the [Releases page](https://github.com/speedlnq1/daily-news-widget-app/releases) once the first release is out (none yet).
+Installers are published on the [Releases page](https://github.com/speedlnq1/daily-news-widget-app/releases) (latest release: v1.0.0, an unsigned pre-release).
 
 1. Download `Daily-News-Widget-Setup-<version>.exe` and `SHA256SUMS.txt` from the latest release.
 2. **Verify it** (optional but recommended). In PowerShell: `Get-FileHash .\Daily-News-Widget-Setup-<version>.exe -Algorithm SHA256` and compare with the line in `SHA256SUMS.txt`.

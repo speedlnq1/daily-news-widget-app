@@ -11,7 +11,7 @@ Please report privately through GitHub: Security tab > "Report a vulnerability" 
 ## Release status (read before trusting a download)
 - **Installers are not code-signed yet.** Windows SmartScreen will show an "unknown publisher" warning. Verify downloads against the `SHA256SUMS.txt` attached to each release, or build from source.
 - **Auto-update is disabled in the code** (`src/updates.js`) until `build.win.publisherName` is set in package.json. A test fails while that field is set, so turning updates on is always a deliberate change, and the app never downloads or runs updates while unsigned.
-- Releases are built by GitHub Actions from a version tag (`.github/workflows/release.yml`) and stay a dry run until the maintainer sets the repository variable `PUBLISH_RELEASES=true`.
+- Releases are built by GitHub Actions (`.github/workflows/release.yml`) and are published only when the maintainer asks: by running the workflow by hand with "publish" ticked, or by pushing a version tag while the repository variable `PUBLISH_RELEASES` is `true`. Every other run is a dry run.
 
 ## Needs the maintainer before signed releases
 1. **Code signing:** apply for free open-source signing (SignPath Foundation) or buy an OV/EV certificate (or Azure Trusted Signing). Then add the signing secrets in GitHub, and set `build.win.publisherName` in package.json to the exact certificate subject. Updating `test/updates.test.js` to expect updates ON is part of that change.
