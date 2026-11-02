@@ -1,6 +1,6 @@
 {
   "name": "daily-news-widget",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Desktop news widget: top 10 verified stories per tab",
   "main": "src/main.js",
   "scripts": {

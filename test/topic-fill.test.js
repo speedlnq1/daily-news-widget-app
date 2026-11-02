@@ -44,7 +44,7 @@ assert.strictEqual(rankStories([
   L('npr', "New York City Marathon: Sweden's Almgren and Kenya's Chepkirui win as 60,000 take part", "Andreas Almgren of Sweden won the men's race of the New York City Marathon in his debut while Sheila Chepkirui of Kenya won the women's race."),
   L('guardian', 'New York City Marathon: Andreas Almgren wins on debut as Sheila Chepkirui reclaims crown', 'Sheila Chepkirui of Kenya won the women’s race; Sweden’s Andreas Almgren won the men’s race on debut.', 2)]).length, 1, 'marathon');
 // ...but not across more than 36 hours
-assert.strictEqual(rankStories([michigan[0], { ...michigan[1], ts: now - 40 * 36e5 }]).length, 0, 'too far apart');
+assert.strictEqual(rankStories([michigan[0], { ...michigan[1], ts: now - 80 * 36e5 }]).length, 0, 'too far apart');
 
 // different stories must stay apart (each pair: bbc + guardian; a wrong join would make one fake "verified" story)
 const apart = [
@@ -106,7 +106,32 @@ assert.strictEqual(rankStories([L('bbc', 'Earthquake damages buildings in wester
 for (const [a, b, sa = '', sb = ''] of together) assert.strictEqual(rankStories([L('bbc', a, sa), L('guardian', b, sb, 2), FILLER]).length, 1, a + ' / ' + b);
 
 // two developments of one case stay apart; when two headlines are equally close, the newest one is shown
-assert.strictEqual(rankStories([L('bbc', 'Erin Patterson appeal hearing begins in Melbourne', '', 30), L('guardian', 'Erin Patterson loses appeal in Melbourne', '', 1)]).length, 0, 'begins vs loses');
+// a later development of the same story is one story, headed by the newest headline (no repeats)
+const dev = rankStories([L('bbc', 'Erin Patterson appeal hearing begins in Melbourne', '', 30), L('guardian', 'Erin Patterson loses appeal in Melbourne', '', 1)], { localOk: true });
+assert.strictEqual(dev.length, 1, 'begins then loses'); assert.strictEqual(dev[0].title, 'Erin Patterson loses appeal in Melbourne');
+const binance = rankStories([
+  L('npr', 'Binance Suspends Withdrawals After Crypto Hackers Steal $6.3 Billion', 'The crypto exchange said it was compromised in what could be the biggest crypto heist.', 48),
+  L('nyt', 'Binance Suspends Withdrawals After Crypto Hackers Steal $6.3 Billion', 'The crypto exchange said it was compromised in what could be the biggest heist.', 47),
+  L('techcrunch', 'Binance resumes customer withdrawals after record $6.3bn hack', 'Cryptocurrency exchange says 90% of losses covered as FBI blames North Korea', 10),
+  L('guardian', 'Binance resumes customer withdrawals after record $6.3bn hack', 'Cryptocurrency exchange says 90% of losses covered as FBI blames North Korea.', 11)]);
+assert.strictEqual(binance.length, 1, 'suspends then resumes'); assert.ok(/resumes/.test(binance[0].title)); assert.strictEqual(binance[0].indep, 4);
+// look-alikes days apart are still two stories
+for (const [a, b] of apart) assert.ok(rankStories([L('bbc', a, '', 30), L('guardian', b, '', 1)], { localOk: true }).every(s => s.sources.length === 1), 'follow-up: ' + a);
+// repeat filter: another angle on a story already shown is hidden (its links count as seen); broad names do not tie stories
+const shown = rankStories([L('techcrunch', 'Binance resumes withdrawals following $6.3 billion breach', '', 3), L('guardian', 'Binance resumes customer withdrawals after record $6.3bn hack', '', 4),
+  L('verge', 'North Korea linked to massive Binance crypto heist', '', 5), L('dw', 'FBI says North Korea behind $6.3 billion Binance crypto heist', '', 6)], { localOk: true });
+assert.strictEqual(shown.length, 1, 'one Binance story'); assert.strictEqual(shown[0].links.length, 4);
+assert.strictEqual(rankStories([L('techcrunch', 'Nvidia weighs playing the cosigner for Nscale’s AI data center in West Virginia', '', 3), L('verge', 'OpenAI might rebrand its AI data centers as compute campuses', '', 4)], { localOk: true }).length, 2, 'AI data centers');
+assert.strictEqual(rankStories([L('nyt', 'Haley Stevens endorses GOP candidate in Michigan Senate race', '', 3), L('npr', 'Former President Obama endorses Booker in Kentucky Senate race', '', 4)], { localOk: true }).length, 2, 'Senate races');
+// two different strikes days apart are not one verified story
+assert.strictEqual(rankStories([L('bbc', 'Russian missile strike on Kharkiv apartment block kills 12', '', 50), L('guardian', 'Russian missile strike on Kharkiv hospital kills 4', '', 2)]).length, 0, 'Kharkiv strikes');
+// a single-outlet story never hides a verified one; a verified story needs a stronger tie to be hidden
+const tech = rankStories([L('techcrunch', 'Hackers steal Salesforce customer support records in Gainsight breach', '', 1), L('verge', 'Salesforce cuts 4,000 customer support jobs as AI agents take over', '', 2), L('wired', 'Salesforce cuts 4,000 customer support jobs, replacing them with AI agents', '', 2)], { profile: 'tech', localOk: true, singleCap: 2 });
+assert.ok(tech.some(s => s.verified), 'verified Salesforce story kept');
+assert.strictEqual(rankStories([L('bbc', 'Ryanair cancels hundreds of summer flights as French air traffic control strike begins', '', 2), L('guardian', 'Ryanair cancels hundreds of summer flights as French air traffic control strike begins', '', 3),
+  L('sky', 'Ryanair profit jumps 42% as air fares rise and flights stay full', '', 2), L('independent', 'Ryanair profit jumps 42% as air fares rise and flights stay full', '', 3)]).length, 2, 'Ryanair');
+// different places stay visible as two stories
+assert.strictEqual(rankStories([L('bbc', 'Fighting spreads in South Sudan as talks stall', '', 30), L('guardian', 'Fighting spreads in Sudan as talks stall', '', 1)], { localOk: true }).length, 2);
 const lead = rankStories([L('bbc', 'Mushroom murderer Erin Patterson loses appeal', 'Erin Patterson, the mushroom murderer, lost her appeal.', 30), L('guardian', 'Erin Patterson loses appeal over mushroom murders', 'Erin Patterson, the mushroom murderer, lost her appeal.', 1)]);
 assert.strictEqual(lead.length, 1); assert.strictEqual(lead[0].title, 'Erin Patterson loses appeal over mushroom murders', 'newest wins a tie');
 // joined place names are names; ordinary Title Case words are not joined

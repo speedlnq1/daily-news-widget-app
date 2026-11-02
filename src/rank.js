@@ -171,15 +171,18 @@ function orderConflict(a, b, fa, fb) {
 const COMPASS = new Set('north south east west northern southern eastern western central'.split(' '));
 const dir = w => w.replace(/ern$/, ''); // east and eastern are one direction
 const compassClash = (a, b) => a.some((w, i) => COMPASS.has(w) && i + 1 < a.length && b.some((v, k) => COMPASS.has(v) && dir(v) !== dir(w) && b[k + 1] === a[i + 1]));
-function conflict(a, b, ca = new Set(), cb = new Set(), fa = new Set(), fb = new Set(), nameRule = true) {
+// develop: the two headlines came out hours apart, so new figures or a reversal ("suspends" then "resumes") are the
+// next step of one story, not a contradiction.
+function conflict(a, b, ca = new Set(), cb = new Set(), fa = new Set(), fb = new Set(), nameRule = true, develop = false) {
   const na = [...new Set(hasNum(a))], nb = [...new Set(hasNum(b))];
   // different figures conflict unless one headline just adds detail (e.g. "7.1 quake" vs "7.1 quake, 12 dead")
-  if (na.length && nb.length && !na.every(x => nb.includes(x)) && !nb.every(x => na.includes(x))) return true;
+  // a later development may bring new figures only when it repeats one of the first report's ("$6.3bn")
+  if (na.length && nb.length && !na.every(x => nb.includes(x)) && !nb.every(x => na.includes(x)) && !(develop && na.some(x => nb.includes(x)))) return true;
   const A = new Set(a), B = new Set(b);
   if (A.has('not') !== B.has('not') || A.has('no') !== B.has('no')) return true; // negation
   if (compassClash(a, b)) return true;
   const SA = new Set(a.map(ANT)), SB = new Set(b.map(ANT));
-  if (ANTONYMS.some(([x, y]) => (SA.has(x) && SB.has(y)) || (SA.has(y) && SB.has(x)))) return true;
+  if (!develop && ANTONYMS.some(([x, y]) => (SA.has(x) && SB.has(y)) || (SA.has(y) && SB.has(x)))) return true;
   // a name/place that appears in only one headline (Gaza vs Lebanon, UK vs US)
   // Only when BOTH headlines carry a name the other lacks. One-sided extra detail ("... after fleeing to Miami") is the same story.
   if (nameRule && [...ca].some(w => !B.has(w)) && [...cb].some(w => !A.has(w))) return true;
@@ -241,7 +244,7 @@ function shorten(s, n = 140) {
 //  - a fair part of all their words is shared, they came out within 36 hours of each other,
 //  - and no two headlines contradict: different figures, opposite verbs, swapped roles, or a name in one headline that
 //    the other story never mentions ("Senate passes..." vs "House passes...", "floods in Niger" vs "floods in Nigeria").
-const RARE = 4, MIN_SHARED_WORDS = 0.12, WINDOW_H = 36;
+const RARE = 4, MIN_SHARED_WORDS = 0.12, WINDOW_H = 36, FOLLOW_MIN_H = 3, FOLLOW_MAX_H = 72, FOLLOW_WORDS = 0.15;
 // "Indian" is a form of "India", "Mexican" of "Mexico"; "Nigeria" is not a form of "Niger", nor "Australia" of "Austria".
 function akin(a, b) {
   if (a === b) return true;
@@ -275,15 +278,15 @@ function storyFacts(c, lowerAll, lowerSeen, capSeen) {
 // summary ("Hackers", "Boy") is an ordinary word.
 const place = w => PLACES.has(w) || [...PLACES].some(p => akin(p, w));
 const SAME_FRAME = 0.5, SAME_FRAME_ONE_SIDED = 0.8, SAME_NAMES = 0.3;
-function canJoin(A, B, ordinary) {
+function canJoin(A, B, ordinary, develop = false) {
   const unsure = (x, w) => { const ws = norm(x.title).replace(/[^A-Za-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean); return isTitleCase(ws) || canon((ws[0] || '').toLowerCase()) === w; };
   const own = (x, y) => { const ys = new Set(y.tk); return [...x.cp].filter(w => !mentions(ys, w) && (SUBJECTS.has(w) || place(w) || !ordinary.has(w) || !unsure(x, w))); };
   const missing = (names, other) => names.filter(w => !mentions(SUBJECTS.has(w) || place(w) ? other.head : other.words, w));
   const rest = (x, names) => x.tk.filter(w => !names.includes(w));
   return A.items.every(x => B.items.every(y => {
-    if (conflict(x.tk, y.tk, x.cp, y.cp, x.fp, y.fp, false)) return false;
+    if (conflict(x.tk, y.tk, x.cp, y.cp, x.fp, y.fp, false, develop)) return false;
     const ox = own(x, y), oy = own(y, x);
-    if (!ox.length && !oy.length) return similarity(x.tk, y.tk) >= SAME_NAMES; // the same names: the headlines must agree too
+    if (!ox.length && !oy.length) return develop || similarity(x.tk, y.tk) >= SAME_NAMES; // the same names: the headlines must agree too
     if (!ox.length || !oy.length) return true; // one headline only adds detail
     const mx = missing(ox, B), my = missing(oy, A);
     if (mx.length && my.length) return false;
@@ -307,7 +310,7 @@ function mergeByNames(clusters, lowerSeen, capSeen) {
   for (const f of facts) for (const w of f.names) df.set(w, (df.get(w) || 0) + 1);
   const rare = w => df.get(w) <= RARE;
   // groups[k]: the merged group cluster k belongs to; each group keeps its items and the union of its facts
-  const groups = clusters.map((c, k) => ({ items: c.items.slice(), head: new Set(facts[k].head), words: new Set(facts[k].words) }));
+  const groups = clusters.map((c, k) => ({ items: c.items.slice(), head: new Set(facts[k].head), words: new Set(facts[k].words), names: new Set(facts[k].names), newest: facts[k].newest }));
   const byName = new Map(); // rare name -> clusters that mention it, so only plausible pairs are compared
   facts.forEach((f, k) => { for (const w of f.names) if (rare(w)) byName.set(w, [...(byName.get(w) || []), k]); });
   for (const list of byName.values()) for (let p = 0; p < list.length; p++) for (let q = p + 1; q < list.length; q++) {
@@ -317,13 +320,39 @@ function mergeByNames(clusters, lowerSeen, capSeen) {
     const sharedPlainWord = [...A.head].some(w => B.head.has(w) && !A.names.has(w) && !B.names.has(w));
     if (sharedNames < 2 || !sharedPlainWord) continue;
     if (overlap([...A.words], [...B.words]).jac < MIN_SHARED_WORDS || !canJoin(gi, gj, lowerAll)) continue;
+    join(gi, gj);
+  }
+  followUps([...new Set(groups)], lowerAll);
+  // newest item first, as in the first pass (the card links each outlet's newest article)
+  return [...new Set(groups)].map(g => ({ items: g.items.sort((x, y) => (y.ts || 0) - (x.ts || 0)), latest: g.latest }));
+  function join(gi, gj) {
     gi.items.push(...gj.items);
-    for (const w of gj.head) gi.head.add(w);
-    for (const w of gj.words) gi.words.add(w);
+    for (const k of ['head', 'words', 'names']) for (const w of gj[k]) gi[k].add(w);
+    gi.newest = Math.max(gi.newest, gj.newest);
     groups.forEach((g, k) => { if (g === gj) groups[k] = gi; });
   }
-  // newest item first, as in the first pass (the card links each outlet's newest article)
-  return [...new Set(groups)].map(g => ({ items: g.items.sort((x, y) => (y.ts || 0) - (x.ts || 0)) }));
+  // Repeats: a later development of a story ("Binance suspends withdrawals after hack", then "Binance resumes
+  // withdrawals after hack") is one story. Two groups join when they came out hours apart (but within 3 days), name the
+  // same uncommon name in their headlines ("Elon Musk" counts once), share two more headline words that are not everyday news words (one if they share
+  // two names) and a fair part of all their words, and pass
+  // the same name checks as above (so Sudan and South Sudan stay apart). The card then shows the newest headline.
+  function followUps(list, ordinary) {
+    list.sort((a, b) => b.newest - a.newest);
+    for (let p = 0; p < list.length; p++) for (let q = p + 1; q < list.length; q++) {
+      const A = list[p], B = list[q];
+      if (A.gone || B.gone) continue;
+      const gap = Math.abs(A.newest - B.newest) / 36e5;
+      if (gap < FOLLOW_MIN_H || gap > FOLLOW_MAX_H) continue;
+      const shared = [...A.head].filter(w => B.head.has(w));
+      const names = shared.filter(w => A.names.has(w) && B.names.has(w) && !COMMON.has(w));
+      const plain = shared.filter(w => !A.names.has(w) && !B.names.has(w) && (/\d/.test(w) || !COMMON_NEWS.has(w))).length; // figures count, "talks" and "deal" do not
+      const nameCount = countNames(names, (v, w) => A.items.some(i => i.tk.includes(v) && i.tk.indexOf(w) - i.tk.indexOf(v) === 1));
+      if (!nameCount || plain < (nameCount >= 2 ? 1 : 2)) continue;
+      if (overlap([...A.words], [...B.words]).jac < FOLLOW_WORDS || !canJoin(A, B, ordinary, true)) continue;
+      const latest = A.latest || A.items.slice();
+      join(A, B); A.latest = latest; B.gone = true;
+    }
+  }
 }
 
 // items: [{source, title, link, summary, ts}]
@@ -363,8 +392,9 @@ function rankStories(items, { limit = 10, minSources = 2, localOk = false, singl
     if (!TOPICS.wanted(c.items.map(i => i.title).join(' '), show, c.items.map(i => i.summary || '').join(' '), filed)) continue;
     // The headline shown is the one closest to all the others (the core of the story); ties go to the newest, then to
     // the one with the longest summary.
+    // For a story with later developments, only the newest development's headlines are candidates.
     const close = i => c.items.reduce((n, m) => n + (m === i ? 0 : overlap(distinct(i.tk), distinct(m.tk)).shared), 0);
-    const lead = c.items.map(i => ({ i, n: close(i) }))
+    const lead = (c.latest || c.items).map(i => ({ i, n: close(i) }))
       .sort((a, b) => b.n - a.n || (b.i.ts || 0) - (a.i.ts || 0) || (b.i.summary || '').length - (a.i.summary || '').length)[0].i;
     if (c.items.every(i => i.ts > 0 && now - i.ts > 72 * 36e5)) continue; // too old to be news
     const newest = Math.min(now, Math.max(...c.items.map(i => i.ts || 0)));
@@ -383,10 +413,12 @@ function rankStories(items, { limit = 10, minSources = 2, localOk = false, singl
       sources: sources.map(s => TRUSTED[s]),
       articles: sources.map(src => ({ outlet: TRUSTED[src], link: c.items.find(i => i.source === src).link })), // newest article from each outlet
       indep: new Set(sources.map(family)).size, impact,
+      heads: new Set(c.items.flatMap(i => distinct(i.tk))), names: new Set(c.items.flatMap(i => [...i.cp]).filter(w => !COMMON.has(w))),
       verified, ts: newest, firstTs: Math.min(...c.items.map(i => i.ts).filter(t => t > 0), Infinity) === Infinity ? 0 : Math.min(...c.items.map(i => i.ts).filter(t => t > 0)), links: c.items.map(i => i.link), score
     });
   }
   out.sort((a, b) => b.score - a.score);
+  dropRepeats(out);
   if (!singleCap) return out.slice(0, limit);
   // Verified stories come first; single-source stories fill the rest, at most singleCap per outlet.
   const picked = out.filter(story => story.verified);
@@ -397,6 +429,28 @@ function rankStories(items, { limit = 10, minSources = 2, localOk = false, singl
     if (perOutlet[outlet] <= singleCap) picked.push(story);
   }
   return picked.slice(0, limit);
+}
+
+// Last safety net against repeats: a lower-ranked story whose headlines share a name and two more telling words with a
+// story already shown is the same subject again ("North Korea linked to Binance hack" under "Binance resumes
+// withdrawals after $6.3bn hack"). It is hidden, not merged: its outlets do not count towards the shown story, but its
+// links do, so it does not come back as new.
+const BROAD_NAMES = new Set('ai crypto republican democrat labour tory conservative reform'.split(' ').map(canon)); // too broad to tie two stories
+function dropRepeats(out) {
+  const kept = [];
+  for (let k = 0; k < out.length; k++) {
+    const s = out[k];
+    const same = kept.find(t => {
+      if (s.verified && !t.verified) return false; // a single-outlet story never hides a verified one
+      const shared = [...s.heads].filter(w => t.heads.has(w));
+      const names = shared.filter(w => s.names.has(w) && t.names.has(w) && !COMMON_NEWS.has(w) && !SUBJECTS.has(w) && !BROAD_NAMES.has(w)).length;
+      const plain = shared.filter(w => !s.names.has(w) && !t.names.has(w) && (/\d/.test(w) || !COMMON_NEWS.has(w))).length;
+      // a verified story is hidden only on stronger ties: two names or a shared figure
+      return names && plain >= 2 && (!s.verified || names >= 2 || shared.some(w => /\d/.test(w)));
+    });
+    if (same) { same.links.push(...s.links.filter(l => !same.links.includes(l))); out.splice(k--, 1); } else kept.push(s);
+  }
+  for (const s of out) { delete s.heads; delete s.names; }
 }
 
 module.exports = { isLowQuality, conflict, caps, distinct, same, tokens, decode, clean, safeLink, rankStories, similarity, shorten, SOFT };
