@@ -1,10 +1,11 @@
 // Live-feed check: runs the real fetch + ranking against the internet (no Electron) and writes a report.
 // Usage: node scripts/live-test.js [out.json]   (needs internet; run by the "Live feeds" CI job)
 const fs = require('fs');
-const { gather } = require('../src/fetcher');
-const { FEEDS, stateFeeds, countryList, regionMatch } = require('../src/sources');
+const { gather, fetchAll, countryItems, TABS } = require('../src/fetcher');
+const TOPICS = require('../src/topics');
+const { FEEDS, SECTIONS, stateFeeds, regionMatch } = require('../src/sources');
 const GEO = require('../src/geo');
-const { isLowQuality, rankStories, tokens, similarity, same, conflict, caps, capsAll, distinct } = require('../src/rank');
+const { isLowQuality, rankStories, tokens, similarity, same, conflict, caps } = require('../src/rank');
 
 const CASES = [
   { country: 'US', state: 'California' }, { country: 'US', state: 'Texas' }, { country: 'US', state: 'Washington State' },
@@ -35,7 +36,7 @@ function missed(stories, raw) {
     if (sim >= 0.3 && !seen.has(k)) {
       seen.add(k);
       const ta = tokens(a.title), tb = tokens(b.title), ca = caps(a.title), cb = caps(b.title);
-      out.push({ sim: +sim.toFixed(2), why: conflict(ta, tb, ca, cb) ? 'CONFLICT uniqA=' + [...ca].filter(w => !tb.includes(w)).join('/') + ' uniqB=' + [...cb].filter(w => !ta.includes(w)).join('/') : same(ta, tb, ca, cb, capsAll(a.title), capsAll(b.title), capsAll(a.title), capsAll(b.title)) ? 'same-but-not-clustered' : 'low-overlap', a: `${a.source}: ${a.title}`, b: `${b.source}: ${b.title}` });
+      out.push({ sim: +sim.toFixed(2), why: conflict(ta, tb, ca, cb) ? 'CONFLICT uniqA=' + [...ca].filter(w => !tb.includes(w)).join('/') + ' uniqB=' + [...cb].filter(w => !ta.includes(w)).join('/') : same(ta, tb, ca, cb, ca, cb, ca, cb) ? 'same-but-not-clustered' : 'low-overlap', a: `${a.source}: ${a.title}`, b: `${b.source}: ${b.title}` });
     }
   }
   return out.sort((x, y) => y.sim - x.sim).slice(0, 15);
@@ -85,20 +86,22 @@ async function candidateProbe() {
   // fixed feeds
   await probe('world', FEEDS.world); await probe('tech', FEEDS.tech);
   for (const c of Object.keys(FEEDS.country)) await probe('country:' + c, FEEDS.country[c]);
+  for (const sec of Object.keys(SECTIONS)) await probe('section:' + sec, SECTIONS[sec]);
 
   const world = await gather(FEEDS.world), tech = await gather(FEEDS.tech);
-  const W = rankStories(world), T = rankStories(tech, { profile: 'tech', localOk: true, singleCap: 2 });
+  const W = rankStories(world, TABS.world), T = rankStories(tech, TABS.tech);
   report.tabs.world = { stories: describe(W, world), missed: missed(W, world), rawCount: world.length, breaking: W.filter(breaking).map(s => s.title) };
   report.tabs.tech = { stories: describe(T, tech), missed: missed(T, tech), rawCount: tech.length, verifiedCount: T.filter(s => s.verified).length, singleSourceCount: T.filter(s => !s.verified).length, breaking: T.filter(breaking).map(s => s.title) };
 
+  const raws = {};
   for (const c of CASES) {
     const id = `${c.country}${c.state ? '/' + c.state : ''}`;
-    const cf = countryList(c.country, name(c.country));
-    const craw = await gather(cf);
-    const C = rankStories(craw, { minSources: 2, profile: 'country' });
+    const craw = await countryItems(c.country, name(c.country)); // the same items the app's Country tab ranks
+    const C = rankStories(craw, TABS.country);
     let S = [], sraw = [];
     const hasRegions = c.state && GEO.hasRegions(c.country);
-    if (hasRegions) { sraw = (await gather(stateFeeds(c.state, c.country, name(c.country)))).filter(i => regionMatch(c.state).test(i.title)); S = rankStories(sraw, { localOk: true, profile: 'state' }); }
+    if (hasRegions) { sraw = (await gather(stateFeeds(c.state, c.country, name(c.country)))).filter(i => regionMatch(c.state).test(i.title)); S = rankStories(sraw, TABS.state); }
+    raws[id] = { country: craw, state: sraw };
     report.tabs[id] = {
       country: { curated: !!FEEDS.country[c.country], rawCount: craw.length, stories: describe(C, craw), missed: missed(C, craw), breaking: C.filter(breaking).map(s => s.title) },
       state: { hasRegions: !!hasRegions, rawCount: sraw.length, stories: describe(S, sraw), singleSource: S.filter(s => !s.verified).length }
@@ -112,7 +115,6 @@ async function candidateProbe() {
   for (const f of report.feeds) L.push(`${f.n === 0 ? 'FAIL' : 'ok  '} ${f.tab} ${f.key} n=${f.n} newest=${f.newestH}h ${f.ms}ms ${f.url}`);
   if (CANDIDATES.length) L.push('', '## Candidate feeds', ...(await candidateProbe()));
   L.push('', '## NYT section feeds', ...(await nytProbe()));
-  const nyt = [...world, ...tech];
   L.push('NYT stories in world top10: ' + report.tabs.world.stories.filter(s => s.sources.includes('NYT')).length + ', multi-outlet with NYT: ' + report.tabs.world.stories.filter(s => s.sources.includes('NYT') && s.indep > 1).length);
   L.push('NYT stories in tech top10: ' + report.tabs.tech.stories.filter(s => s.sources.includes('NYT')).length);
   {
@@ -131,6 +133,17 @@ async function candidateProbe() {
     if (t.missed && t.missed.length) { L.push('  possible missed merges:'); t.missed.forEach(m => L.push(`   ${m.sim} [${m.why}] ${m.a} || ${m.b}`)); }
     if (t.breaking && t.breaking.length) L.push('  would alert: ' + t.breaking.join(' | '));
   };
+  // Topic coverage: what the app shows (same code path) when only one topic is picked. A 0 is a blank tab for that user.
+  L.push('', '## Topic coverage: stories per tab with only that topic picked (world / country / local / tech)');
+  for (const [country, state] of [['US', 'California'], ['GB', 'Scotland']]) {
+    const row = [];
+    for (const t of TOPICS.IDS) { const r = await fetchAll({ country, state, topics: [t] }); row.push(`${t}=${r.world.length}/${r.country.length}/${r.state.length}/${r.tech.length}`); }
+    L.push(`${country}/${state}: ` + row.join(' '));
+  }
+  const cover = (label, raw, opts) => L.push(`${label.padEnd(22)} ` + TOPICS.IDS.map(t => `${t}=${rankStories(raw, { ...opts, show: [t] }).length}`).join(' '));
+  L.push('Main feeds only, no topic sections:');
+  cover('world', world, TABS.world); cover('tech', tech, TABS.tech);
+  for (const id of ['US/California', 'GB/Scotland', 'ES', 'IN/Maharashtra', 'AU/Victoria']) { cover(id + ' country', raws[id].country, TABS.country); cover(id + ' state', raws[id].state, TABS.state); }
   dump('world', report.tabs.world); dump('tech', report.tabs.tech);
   for (const c of CASES) { const id = `${c.country}${c.state ? '/' + c.state : ''}`; dump(id + ' country', report.tabs[id].country); dump(id + ' state', report.tabs[id].state); }
   if (process.env.RAW) {

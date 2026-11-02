@@ -19,17 +19,30 @@
   ];
   const OTHER = { id: 'other', label: 'Everything else' }; // stories that match no topic above
   const ALL = TOPICS.map(t => t.id).concat(OTHER.id);
-  // Each story has ONE topic: the one with the most keyword hits (ties go to the earlier topic in the list), or 'other' when none hit.
+  // A story with no keyword hits at all is 'other'.
   const hits = (t, text) => (text.match(t.all) || []).length + hitsCaps(t, text);
   TOPICS.forEach(t => { t.all = new RegExp(t.re.source, 'gi'); });
   // Words that are only meaningful in capitals ("AI" vs "Ai Weiwei", "the Fed") are counted by a case-sensitive pattern.
   const caps = { ai: /\bAI\b/g, finance: /\bFed\b/g };
   const hitsCaps = (t, text) => (caps[t.id] ? (text.match(caps[t.id]) || []).length : 0);
-  const topicOf = text => { let best = OTHER.id, top = 0; for (const t of TOPICS) { const n = hits(t, text); if (n > top) { best = t.id; top = n; } } return best; };
+  // A story fits the topic with the most hits. Headline hits count double, because summaries ramble ("the company said...").
+  // A tie fits every tied topic, so "OpenAI CEO quits" is both AI and Business and shows for either pick.
+  // `filed`: topics of the outlet sections the story came from ("Arsenal 2-1 Chelsea" sits in the sport feed). Each counts
+  // like one headline hit, so it decides a story with no keywords but never outweighs clear ones (a crypto hack filed
+  // under Business is still crypto).
+  const topicsOf = (title, summary = '', filed = []) => {
+    let best = [OTHER.id], top = 0;
+    for (const t of TOPICS) {
+      const n = 2 * hits(t, title) + hits(t, summary) + (filed.includes(t.id) ? 2 : 0);
+      if (n > top) { best = [t.id]; top = n; } else if (n && n === top) best.push(t.id);
+    }
+    return best;
+  };
+  const topicOf = (title, summary) => topicsOf(title, summary)[0]; // the main topic (ties: the one listed first)
   const api = {
-    TOPICS: TOPICS.concat(OTHER), IDS: ALL, topicOf,
+    TOPICS: TOPICS.concat(OTHER), IDS: ALL, topicOf, topicsOf,
     valid: ids => (Array.isArray(ids) ? ids : []).filter(i => ALL.includes(i)).filter((v, i, a) => a.indexOf(v) === i),
-    wanted: (text, ids) => (ids || []).includes(topicOf(text)),
+    wanted: (title, ids, summary, filed) => topicsOf(title, summary, filed).some(id => (ids || []).includes(id)),
     // Chosen topics from saved settings. Older versions saved the topics to HIDE; those become "everything except". Nothing saved means all topics.
     fromSettings: s => Array.isArray(s.topics) ? api.valid(s.topics) : Array.isArray(s.hidden) ? ALL.filter(i => !api.valid(s.hidden).includes(i)) : ALL.slice()
   };

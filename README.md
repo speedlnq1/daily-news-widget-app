@@ -34,7 +34,7 @@ _Screenshots on this page use made-up sample headlines and outlet names, because
 - **Breaking-news alerts.** Every 15 minutes the app checks for a major story that 3+ trusted outlets carry and that was first reported under 6 hours ago, and sends one Windows notification per story.
 - **Story card.** Click a story (or press Enter) for its headline, when it was first reported, a short summary from the feed, every outlet covering it and a **Go to source** button. It never downloads the article. Esc closes it.
 - **Your place.** A short guided first run asks for your country, region and topics. Country and Local come from hand-picked feeds for many countries plus a trusted-outlet search for every other country (English-language outlets), with a clear message instead of a blank tab when there is no coverage.
-- **Topic picking.** Choose the topics you want (war, politics, crime, celebrity, sports, disasters, crypto, finance, business, AI, technology, science, health, everything else). Unwanted topics are removed before the top 10 is chosen, so tabs fill from the best stories that remain, and alerts follow your choices.
+- **Topic picking.** Choose the topics you want (war, politics, crime, celebrity, sports, disasters, crypto, finance, business, AI, technology, science, health, everything else). Unwanted topics are removed before the top 10 is chosen, so tabs fill from the best stories that remain, and alerts follow your choices. Pick only a few topics and the widget also reads those topic sections (Sport, Business, Health, Science...) of the same trusted outlets, so narrow picks still fill up.
 - **Optional Reddit tab** (off by default, experimental). Top posts of the day from AI and coding communities such as r/ClaudeAI, r/OpenAI and r/LocalLLaMA, read from Reddit's public RSS feeds with no account or API key. Click a post for a card with its text and top comment. It is opinion, not verified news, and is kept apart from the news tabs.
 
 **Look and feel**
@@ -74,7 +74,7 @@ More detail on every feature: [docs/GUIDE.md](docs/GUIDE.md).
 
 ## Download
 
-Installers are published on the [Releases page](https://github.com/speedlnq1/daily-news-widget-app/releases) (latest release: v1.0.1, an unsigned pre-release).
+Installers are published on the [Releases page](https://github.com/speedlnq1/daily-news-widget-app/releases) (latest release: v1.0.2, an unsigned pre-release).
 
 1. Download `Daily-News-Widget-Setup-<version>.exe` and `SHA256SUMS.txt` from the latest release.
 2. **Verify it** (optional but recommended). In PowerShell: `Get-FileHash .\Daily-News-Widget-Setup-<version>.exe -Algorithm SHA256` and compare with the line in `SHA256SUMS.txt`.

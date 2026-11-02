@@ -60,7 +60,8 @@ function render() {
           : !(settings.topics || []).length ? ['☑', 'No topics picked', 'Open Settings and tick the topics you want to see.']
           : cur === 'country' ? ['✓', 'No trusted stories about ' + (NAMES[settings.country] || 'your country') + ' right now', 'Only stories from trusted outlets are shown, so quiet news days can leave this empty. Try again later, or pick more topics in Settings.']
           : cur === 'tech' ? ['✓', 'No trusted tech stories right now', 'Stories show once a trusted tech outlet covers them. Try again later, or pick more topics in Settings.']
-          : ['✓', 'No verified stories right now', 'Stories show once 2+ trusted outlets cover them. Try again later, or pick more topics in Settings.'];
+          : cur === 'state' ? ['✓', 'No trusted local stories on your topics right now', 'Local news is quieter. Try again later, or pick more topics in Settings.']
+          : ['✓', 'No verified stories on your topics right now', 'World shows a story only once 2+ independent outlets cover it. The other tabs also show single-outlet stories, labelled.'];
         const box = el('div', 'empty'); const ic = el('div', 'ic', icon); ic.setAttribute('aria-hidden', 'true'); box.appendChild(ic); box.appendChild(el('b', '', head)); box.appendChild(el('span', '', sub));
         if (data.error) { const r = el('button', 'sec', 'Try again'); r.onclick = () => { retryFocus = true; $('rf').click(); }; box.appendChild(r); if (retryFocus) r.focus(); }
         list.appendChild(box);

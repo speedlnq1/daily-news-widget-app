@@ -7,6 +7,7 @@ const feeds = require('./support/feeds')();
 (async () => {
   await H.ready; await H.flush();
   feeds.bodies['re:.'] = feeds.rss([['Scientists announce major discovery in deep ocean research', 'https://example.com/a'], ['Scientists announce major discovery in deep ocean research', 'https://example.org/b']]);
+  feeds.bodies['re:[Ss]port|/1055/'] = feeds.rss([]); // the sport sections have nothing today
   H.fetchImpl = (u, o) => feeds.fetch(u, o);
   const set = H.handlers['set-settings'];
   const base = { country: 'US', state: '', alerts: false, startup: false };

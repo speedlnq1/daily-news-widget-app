@@ -82,6 +82,35 @@ const FEEDS = {
   ]
 };
 
+// Topic sections of the same trusted outlets. They are read only when the user picked some topics (not all) and a
+// tab came out short, so a narrow pick like "Sports" or "Health" still fills its tabs with verified stories.
+const SECTIONS = {
+  sports: [['bbc', 'https://feeds.bbci.co.uk/sport/rss.xml'], ['guardian', 'https://www.theguardian.com/sport/rss'], ['independent', 'https://www.independent.co.uk/sport/rss'], ['npr', 'https://feeds.npr.org/1055/rss.xml']],
+  arts: [['bbc', 'https://feeds.bbci.co.uk/news/entertainment_and_arts/rss.xml'], ['guardian', 'https://www.theguardian.com/culture/rss'], ['nyt', 'https://rss.nytimes.com/services/xml/rss/nyt/Arts.xml'],
+    ['sky', 'https://feeds.skynews.com/feeds/rss/entertainment.xml'], ['independent', 'https://www.independent.co.uk/arts-entertainment/rss'], ['npr', 'https://feeds.npr.org/1008/rss.xml']],
+  business: [['bbc', 'https://feeds.bbci.co.uk/news/business/rss.xml'], ['guardian', 'https://www.theguardian.com/business/rss'], ['nyt', 'https://rss.nytimes.com/services/xml/rss/nyt/Business.xml'],
+    ['sky', 'https://feeds.skynews.com/feeds/rss/business.xml'], ['npr', 'https://feeds.npr.org/1006/rss.xml'], ['cbs', 'https://www.cbsnews.com/latest/rss/moneywatch']],
+  health: [['bbc', 'https://feeds.bbci.co.uk/news/health/rss.xml'], ['guardian', 'https://www.theguardian.com/society/health/rss'], ['nyt', 'https://rss.nytimes.com/services/xml/rss/nyt/Health.xml'],
+    ['npr', 'https://feeds.npr.org/1128/rss.xml'], ['cbs', 'https://www.cbsnews.com/latest/rss/health']],
+  science: [['bbc', 'https://feeds.bbci.co.uk/news/science_and_environment/rss.xml'], ['guardian', 'https://www.theguardian.com/science/rss'], ['nyt', 'https://rss.nytimes.com/services/xml/rss/nyt/Science.xml'],
+    ['npr', 'https://feeds.npr.org/1007/rss.xml'], ['cbs', 'https://www.cbsnews.com/latest/rss/science']],
+  politics: [['bbc', 'https://feeds.bbci.co.uk/news/politics/rss.xml'], ['guardian', 'https://www.theguardian.com/politics/rss'], ['nyt', 'https://rss.nytimes.com/services/xml/rss/nyt/Politics.xml'],
+    ['sky', 'https://feeds.skynews.com/feeds/rss/politics.xml'], ['npr', 'https://feeds.npr.org/1014/rss.xml'], ['cbs', 'https://www.cbsnews.com/latest/rss/politics']],
+  ai: [['guardian', 'https://www.theguardian.com/technology/artificialintelligenceai/rss'], ['verge', 'https://www.theverge.com/rss/ai-artificial-intelligence/index.xml'],
+    ['techcrunch', 'https://techcrunch.com/category/artificial-intelligence/feed/'], ['arstechnica', 'https://arstechnica.com/ai/feed/'], ['mittr', 'https://www.technologyreview.com/topic/artificial-intelligence/feed']],
+  crypto: [['guardian', 'https://www.theguardian.com/technology/cryptocurrencies/rss'], ['techcrunch', 'https://techcrunch.com/category/cryptocurrency/feed/']]
+};
+// Which sections each topic reads. War, crime and disasters are what the main world and country feeds already carry,
+// and the Tech tab's own feeds cover technology. A story from a section counts as that section's topics, because the
+// outlet itself filed it there ("Arsenal 2-1 Chelsea" has no sports keyword but sits in the sport feed).
+const TOPIC_SECTIONS = { sports: ['sports'], celebrity: ['arts'], finance: ['business'], business: ['business'], health: ['health'], science: ['science'], politics: ['politics'], ai: ['ai'], crypto: ['crypto'] };
+const sectionsFor = topics => [...new Set(topics.flatMap(t => TOPIC_SECTIONS[t] || []))];
+const sectionTopics = sec => Object.keys(TOPIC_SECTIONS).filter(t => TOPIC_SECTIONS[t].includes(sec));
+// Home country of these outlets. Their politics section is national news there, so the Country tab can use it without
+// the headline naming the country. Their sport, business or science sections cover the whole world, so they cannot.
+const HOME = { bbc: 'GB', guardian: 'GB', sky: 'GB', independent: 'GB', nyt: 'US', npr: 'US', cbs: 'US' };
+const NATIONAL = new Set(['politics']);
+
 const SITES = ['apnews.com','npr.org','bbc.com','theguardian.com','aljazeera.com','dw.com','pbs.org','cbsnews.com','abcnews.go.com','nytimes.com','skynews.com','independent.co.uk','rnz.co.nz','cbc.ca','straitstimes.com','channelnewsasia.com','rte.ie','dailymaverick.co.za','smh.com.au','globalnews.ca'];
 const siteQ = SITES.map(d => 'site:' + d).join(' OR ');
 const EDITIONS = new Set(['US','GB','CA','AU','IN','IE','NZ','ZA','SG','PH','MY','NG','KE']);
@@ -112,7 +141,11 @@ const COUNTRY_NOT = {
   PE: /Peru,? (?:Ind(?:iana\b|\.)|Illinois|Ill\.|N\.Y|New York)/i
 };
 // "Georgia" alone is also a US state, so the headline needs a country cue as well.
-const COUNTRY_ONLY = { GE: { test: t => /Tbilisi|Georgian|Caucasus|Kobakhidze|\bGeorgia(?:'s)? president\b|president of Georgia/i.test(t) || (/\bGeorgia\b/.test(t) && /\b(?:EU|Russia|Moscow|Brussels|parliament|parliamentary|prime minister|opposition)\b/i.test(t)) } };
+// The US and UK are rarely named in full: "U.S.", "American", "UK", "British", "Scotland"...
+const COUNTRY_ONLY = {
+  US: { test: t => /\b(?:US|U\.S\.?|USA)\b/.test(t) || /(?<!\b(?:South|Latin|Central|North|Captain|Miss|Anglo|Copa|Pan) |\bPan-)\bAmerica(?:ns?)?\b(?!['’]s Cup)|\bUnited States\b/i.test(t) },
+  GB: { test: t => /\b(?:UK|U\.K\.?)\b/.test(t) || /\bBritish\b(?! (?:Columbia|Virgin))|\bLondon\b(?! Breed|,? Ont)|\bWestminster\b(?! Dog)|\b(?:Britain|Scotland|Scottish|Welsh|Northern Ireland|NHS)\b|(?<!New )\bEngland\b|(?<!New South )\bWales\b/i.test(t) },
+  GE: { test: t => /Tbilisi|Georgian|Caucasus|Kobakhidze|\bGeorgia(?:'s)? president\b|president of Georgia/i.test(t) || (/\bGeorgia\b/.test(t) && /\b(?:EU|Russia|Moscow|Brussels|parliament|parliamentary|prime minister|opposition)\b/i.test(t)) } };
 const countryNames = (code, name) => COUNTRY_NAMES[code] || [clean(name)];
 function countryFeeds(code, name) { return [['gnews', gnews(`(${countryNames(code, name).map(n => `"${n}"`).join(' OR ')}) (${siteQ}) when:2d`, code)]]; }
 // Google News matches article text anywhere, so keep only headlines that name the country.
@@ -146,4 +179,4 @@ const REGION_RE = { 'Washington State': /washington state|seattle|olympia|spokan
   'Wales': /(?<!new south )(?<!prince of )(?<!princess of )\bwales\b|cardiff|swansea/i, 'England': /(?<!new )\bengland\b/i };
 function regionMatch(region) { return REGION_RE[region] || new RegExp('\\b' + esc(clean(region)) + '\\b', 'i'); }
 
-module.exports = { TRUSTED, FEEDS, stateFeeds, countryFeeds, countryList, countryMatch, family, regionMatch };
+module.exports = { TRUSTED, FEEDS, SECTIONS, sectionsFor, sectionTopics, HOME, NATIONAL, stateFeeds, countryFeeds, countryList, countryMatch, family, regionMatch };

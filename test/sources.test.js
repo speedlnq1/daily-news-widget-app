@@ -1,8 +1,8 @@
 const assert = require('assert');
-const { TRUSTED, FEEDS, stateFeeds, countryFeeds } = require('../src/sources');
+const { TRUSTED, FEEDS, SECTIONS, stateFeeds, countryFeeds } = require('../src/sources');
 const OK = /(^|\.)(bbci\.co\.uk|theguardian\.com|aljazeera\.com|npr\.org|dw\.com|nytimes\.com|skynews\.com|independent\.co\.uk|the-independent\.com|rnz\.co\.nz|cbc\.ca|abc\.net\.au|thehindu\.com|pbs\.org|cbsnews\.com|abcnews\.go\.com|arstechnica\.com|technologyreview\.com|theverge\.com|wired\.com|techcrunch\.com|france24\.com|straitstimes\.com|kyivindependent\.com|csmonitor\.com|channelnewsasia\.com|rte\.ie|dailymaverick\.co\.za|smh\.com\.au|globalnews\.ca|404media\.co|news\.google\.com)$/;
 const BAD = /opinion|comment|video|podcast|deals|shopping|sponsor/i;
-const all = [...FEEDS.world, ...FEEDS.tech, ...Object.values(FEEDS.country).flat(), ...countryFeeds('FR', 'France'), ...stateFeeds('Ohio', 'US', 'United States')];
+const all = [...FEEDS.world, ...FEEDS.tech, ...Object.values(SECTIONS).flat(), ...Object.values(FEEDS.country).flat(), ...countryFeeds('FR', 'France'), ...stateFeeds('Ohio', 'US', 'United States')];
 for (const [key, url] of all) {
   const u = new URL(url);
   assert.strictEqual(u.protocol, 'https:', url);

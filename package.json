@@ -1,11 +1,11 @@
 {
   "name": "daily-news-widget",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Desktop news widget: top 10 verified stories per tab",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "test": "node test/rank.test.js && node test/topics.test.js && node test/links.test.js && node test/review-probes.test.js && node test/quality.test.js && node test/sources.test.js && node test/live-headlines.test.js && node test/tech-tab.test.js && node test/reddit.test.js && node test/reddit-main.test.js && node test/places.test.js && node test/story-card.test.js && node test/topics-main.test.js && node test/setup-steps.test.js && node test/background.test.js && node test/updates.test.js",
+    "test": "node test/rank.test.js && node test/topics.test.js && node test/links.test.js && node test/review-probes.test.js && node test/quality.test.js && node test/sources.test.js && node test/live-headlines.test.js && node test/tech-tab.test.js && node test/reddit.test.js && node test/reddit-main.test.js && node test/places.test.js && node test/story-card.test.js && node test/topics-main.test.js && node test/topic-fill.test.js && node test/setup-steps.test.js && node test/background.test.js && node test/updates.test.js",
     "dist": "electron-builder --win nsis --publish never",
     "soak": "node --expose-gc test/soak.js 3000"
   },
